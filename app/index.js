@@ -22,6 +22,7 @@ hardRejection()
 const register = require('./register')
 const checkRegister = require('./check-register')
 const info = require('./info')
+const use = require('./use')
 const send = require('./send')
 const inbox = require('./inbox')
 const replacePreKeys = require('./replace-pre-keys')
@@ -74,17 +75,17 @@ const argv = yargs
     _yargs
       .usage('Usage: $0 info [username]')
   })
+  .command('use', 'Set current using user', (_yargs) => {
+    _yargs
+      .usage('Usage: $0 use [username]')
+  })
   .command('send', 'Send a message', (_yargs) => {
     _yargs
-      .usage('Usage: $0 send [from] [to] [message]')
+      .usage('Usage: $0 send [to] [message]')
       .options({
-        from: {
-          alias: 'f',
-          describe: 'Message sender, one of your account'
-        },
-        to: {
-          alias: 't',
-          describe: 'Recipient, a username or hash(when `hash(h)` option is set to true)'
+        use: {
+          alias: 'u',
+          describe: 'Use this keymail account'
         },
         hash: {
           alias: 'h',
@@ -97,9 +98,17 @@ const argv = yargs
     _yargs
       .usage('Usage: $0 inbox [username]')
       .options({
+        use: {
+          alias: 'u',
+          describe: 'Use this keymail account'
+        },
         from: {
           alias: 'f',
           describe: 'Only show messages from this specified person(hash or username)'
+        },
+        watch: {
+          alias: 'w',
+          describe: 'Persistent message receiving'
         }
       })
   })
@@ -107,6 +116,10 @@ const argv = yargs
     _yargs
       .usage('Usage: $0 replace-pre-keys [username]')
       .options({
+        use: {
+          alias: 'u',
+          describe: 'Use this keymail account'
+        },
         from: {
           alias: 'f',
           number: true,
@@ -117,7 +130,7 @@ const argv = yargs
       })
   })
   .recommendCommands()
-  .env('TRUSTBASE')
+  .env('KEYMAIL')
   .config()
   .options({
     trustbase: {
@@ -144,9 +157,15 @@ const argv = yargs
       demandOption: process.env.NODE_ENV !== 'development',
       global: true
     },
+    user: {
+      alias: 'U',
+      describe: 'Use this keymail account as default',
+      string: true,
+      global: true
+    },
     'default-account': {
       alias: ['a', 'defaultAccount'],
-      describe: 'Account address',
+      describe: 'Ethereum account address',
       string: true,
       global: true
     },
@@ -190,6 +209,7 @@ const argv = yargs
   const storagePath = path.resolve(process.cwd(), argv.storagePath)
   const pendingRecordPath = path.resolve(storagePath, '.pending')
   const recordPath = path.resolve(storagePath, '.record')
+  const currentUserPath = path.resolve(storagePath, '.currentUser')
   await fs.ensureDir(storagePath)
   if (!await fs.exists(pendingRecordPath)) {
     await fs.ensureFile(pendingRecordPath)
@@ -199,10 +219,18 @@ const argv = yargs
     await fs.ensureFile(recordPath)
     await fs.writeJSON(recordPath, {})
   }
+  let currentUser = null
+  if (await fs.exists(currentUserPath)) {
+    currentUser = await fs.readFile(currentUserPath, 'utf8')
+  } else {
+    await fs.ensureFile(currentUserPath)
+    await fs.writeJSON(currentUserPath, {})
+  }
   argv.storagePath = storagePath
   argv.pendingRecordPath = pendingRecordPath
   argv.recordPath = recordPath
-
+  argv.currentUserPath = currentUserPath
+  argv.currentUser = currentUser
 
   const handlerOptions = {
     argv,
@@ -219,6 +247,8 @@ const argv = yargs
       return checkRegister(handlerOptions)
     case 'info':
       return info(handlerOptions)
+    case 'use':
+      return use(handlerOptions)
     case 'send':
       return send(handlerOptions)
     case 'inbox':

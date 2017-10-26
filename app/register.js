@@ -68,6 +68,8 @@ async function handleRegister({
   const transactionSpinner = ora('Creating transaction').start()
   const waitTxSpinner = ora('Waiting for transaction')
 
+  const newIdentityKeyString = identityKeyPair.public_key.fingerprint()
+
   trustbase.register(username, identityKeyPair.public_key.fingerprint())
     .on('transactionHash', async (transactionHash) => {
       transactionSpinner.succeed(`Transaction created: ${transactionHash}`)
@@ -78,49 +80,52 @@ async function handleRegister({
           keyPair: sodium.to_hex(new Uint8Array(identityKeyPair.serialise())),
           transactionHash
         }
-      }).catch((err) => {
-        recordSpinner.fail('Fail to save record:')
-        console.error(err)
-        ora().warn('\nIMPORTANT: Please don\'t exit before registration completed, or you will lose your account!')
       })
+        .then(() => {
+          recordSpinner.succeed('Register record saved')
+        })
+        .catch((err) => {
+          recordSpinner.fail('Fail to save record:')
+          console.error(err)
+          ora().warn('\nIMPORTANT: Please don\'t exit before registration completed, or you will lose your account!')
+        })
 
       waitTxSpinner.start()
     })
-    .on('receipt', async (r) => {
-      await fs.writeJSON(pendingRecordPath, pendingRecords)
-      if (r.events.Register) {
-        waitTxSpinner.succeed('Registration success!')
+    .on('confirmation', async (confirmationNumber) => {
+      if (confirmationNumber === 3) {
+        await fs.writeJSON(pendingRecordPath, pendingRecords)
+        const registeredIdentityKeyString = await trustbase.getIdentity(username)
+        if (registeredIdentityKeyString === `0x${newIdentityKeyString}`) {
+          waitTxSpinner.succeed('Registration success!')
 
-        await createAccount({
-          argv: {
-            ...argv,
-            username,
-            usernameHash,
-            identityKeyPair
-          },
-          inquirer,
-          preKeyStore
-        })
+          await createAccount({
+            argv: {
+              ...argv,
+              username,
+              usernameHash,
+              identityKeyPair
+            },
+            inquirer,
+            preKeyStore
+          })
 
-        const recordPath = argv.recordPath
-        const record = await fs.readJSON(recordPath)
-        record[username] = usernameHash
-        await fs.writeJSON(recordPath, record)
-        ora().succeed(`Account(${username}) created`)
-      } else {
-        waitTxSpinner.fail('Username already registered. Try another account name.')
+          const recordPath = argv.recordPath
+          const record = await fs.readJSON(recordPath)
+          record[username] = usernameHash
+          await fs.writeJSON(recordPath, record)
+          ora().succeed(`Account(${username}) created`)
+        } else {
+          waitTxSpinner.fail('Username already registered. Try another account name.')
+        }
+
+        process.exit(0)
       }
-
-      process.exit(0)
     })
     .on('error', async (err) => {
       await fs.writeJSON(pendingRecordPath, pendingRecords)
-      if (err.message.search('invalid opcode') !== -1) {
-        transactionSpinner.fail('Username already registered. Try another account name.')
-      } else {
-        transactionSpinner.fail('Unexpected error:')
-        console.error(err.message)
-      }
+      transactionSpinner.fail('Unexpected error:')
+      console.error(err.message)
       process.exit(1)
     })
 }

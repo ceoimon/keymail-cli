@@ -9,17 +9,11 @@ const { StoreEngine: { FileEngine } } = require('@wireapp/store-engine')
 
 const MyCRUDStore = require('./MyCRUDStore')
 
-function displayMessages(messages, contacts) {
-  messages.forEach((message) => {
-    const usernameHash = message.senderUserHash
-    console.log(`${new Date(message.timestamp * 1000)} - ${contacts[usernameHash] || `Stranger(${usernameHash})`}: ${message.message}`)
-  })
-}
-
 async function handleInbox({
   argv,
   messages,
   inquirer,
+  trustbase,
   web3
 }) {
   const recordPath = argv.recordPath
@@ -30,7 +24,8 @@ async function handleInbox({
     process.exit(0)
   }
 
-  let username = argv._[1]
+  let username = argv._[1] || argv.use || argv.user || argv.currentUser
+
   if (!username) {
     username = usernames.length === 1 ? usernames[0] : (await inquirer.prompt([{
       type: 'list',
@@ -41,8 +36,13 @@ async function handleInbox({
     }])).username
   }
 
-  if (!username || !record[username]) {
-    ora().fail('Invalid username')
+  if (!username) {
+    ora().fail('Invalid username.')
+    process.exit(1)
+  }
+
+  if (!record[username] || !await trustbase.isOwner(web3.eth.defaultAccount, username)) {
+    ora().fail('Invalid username, you don\'t own this username.')
     process.exit(1)
   }
 
@@ -55,6 +55,11 @@ async function handleInbox({
     await fs.writeJSON(userContactsPath, contacts)
   } else {
     contacts = await fs.readJSON(userContactsPath)
+  }
+
+  function displayMessage(message) {
+    const senderUsernameHash = message.senderUserHash
+    console.log(`${new Date(message.timestamp * 1000)} - ${contacts[senderUsernameHash] || `Stranger(${usernameHash})`}: ${message.message}`)
   }
 
   const engine = new FileEngine(userStoragePath)
@@ -70,7 +75,7 @@ async function handleInbox({
   }
 
   const {
-    lastBlock,
+    lastBlock = 0,
     messages: receivedMessages = []
   } = isInboxRecordExist ? await fs.readJSON(inboxPath) : {}
 
@@ -86,56 +91,159 @@ async function handleInbox({
     ? receivedMessages.filter(({ senderUserHash }) => senderUserHash === fromUsernameHash)
     : receivedMessages
 
-  displayMessages(filteredReceivedMessages, contacts)
+  filteredReceivedMessages.forEach(displayMessage)
 
   const currentBlock = await web3.eth.getBlockNumber()
-  if (currentBlock <= lastBlock) {
-    ora().succeed('Your inbox is up to date')
+  if (currentBlock <= lastBlock + 3) {
+    ora().succeed('Inbox is up to date')
     process.exit(0)
   }
 
-  const fetchingSpinner = ora('Fetching new messages...').start()
-  const {
-    lastBlock: newLastBlock,
-    messages: allNewMessages
-  } = await messages.getMessages('proteus', {
-    fromBlock: lastBlock || 0
-  })
+  async function deserializeHelloMessage({
+    message,
+    timestamp,
+    senderUserHash
+  }) {
+    // if something went wrong, just throw and drop the message
+    const {
+      message: actualMessage,
+      username: helloFromUsername
+    } = JSON.parse(message)
 
-  const newReceivedMessages = (await Promise.all(allNewMessages.map(({
+    const helloFromUsernameHash = web3.utils.sha3(helloFromUsername)
+
+    if (helloFromUsernameHash !== senderUserHash) {
+      throw new Error('Invalid hello message')
+    }
+
+    if (Object.keys(contacts).length === 0) {
+      await fs.writeJSON(userContactsPath, {
+        [senderUserHash]: helloFromUsername
+      })
+    } else if (!contacts[senderUserHash]) {
+      await fs.writeJSON(userContactsPath, {
+        ...contacts,
+        [senderUserHash]: helloFromUsername
+      })
+    }
+    contacts[senderUserHash] = helloFromUsername
+    return {
+      message: actualMessage,
+      timestamp,
+      senderUserHash
+    }
+  }
+
+  function deserializeMessage({
+    message,
+    senderUserHash,
+    messageTypeHash,
+    timestamp
+  }) {
+    if (messageTypeHash === web3.utils.sha3('keymail:hello')) {
+      return deserializeHelloMessage({
+        message,
+        timestamp,
+        senderUserHash
+      })
+    }
+    return {
+      message,
+      timestamp,
+      senderUserHash
+    }
+  }
+
+  function decryptMessage({
+    messageTypeHash,
     message,
     senderUserHash,
     timestamp
-  }) => box.decrypt(
-    senderUserHash,
-    sodium.from_hex(message.slice(2)).buffer
-  )
-    .then(decryptedMessage => ({
-      message: sodium.to_string(decryptedMessage),
+  }) {
+    return box.decrypt(
       senderUserHash,
-      timestamp
-    }))
-    .catch(() => null)))
-  )
-    .filter(m => m !== null)
+      sodium.from_hex(message.slice(2)).buffer
+    )
+      .then(decryptedMessage => deserializeMessage({
+        message: sodium.to_string(decryptedMessage),
+        timestamp,
+        senderUserHash,
+        messageTypeHash
+      }))
+      .catch(() => null)
+  }
 
-  const newMessagesNum = newReceivedMessages.length
-  fetchingSpinner.succeed(newMessagesNum > 0
-    ? `Fetched ${newMessagesNum} new message(s)`
-    : 'Your inbox is up to date')
+  async function fetchNewMessages(_lastBlock = lastBlock) {
+    const {
+      lastBlock: newLastBlock,
+      messages: allNewMessages
+    } = await messages.getMessages(['keymail', 'keymail:hello'], _lastBlock > 0 ? {
+      fromBlock: _lastBlock
+    } : undefined)
 
-  const newFilteredReceivedMessages = fromUser
-    ? newReceivedMessages.filter(({ senderUserHash }) => senderUserHash === fromUsernameHash)
-    : newReceivedMessages
+    const newReceivedMessages = (await Promise.all(allNewMessages
+      .map(message => decryptMessage(message))))
+      .filter(m => m !== null)
 
-  displayMessages(newFilteredReceivedMessages, contacts)
 
-  await fs.writeJSON(inboxPath, {
-    lastBlock: newLastBlock > lastBlock ? newLastBlock : lastBlock,
-    messages: receivedMessages.concat(newReceivedMessages)
-  })
+    receivedMessages.push(...newReceivedMessages)
 
-  process.exit(0)
+    await fs.writeJSON(inboxPath, {
+      lastBlock: newLastBlock,
+      messages: receivedMessages
+    })
+
+    return {
+      newLastBlock,
+      newReceivedMessages: fromUser
+        ? newReceivedMessages.filter(({ senderUserHash }) => senderUserHash === fromUsernameHash)
+        : newReceivedMessages
+    }
+  }
+
+  if (argv.watch) {
+    let fetchingSpinner = ora('Fetching messages persistently...').start()
+    let newFetchingLastBlock = lastBlock
+    setTimeout(async function fetchNewMessagesLoop() {
+      const currentBlockNumber = await web3.eth.getBlockNumber()
+      if (currentBlockNumber === newFetchingLastBlock) {
+        setTimeout(fetchNewMessagesLoop, 3000)
+        return
+      }
+
+      try {
+        const {
+          newReceivedMessages,
+          newLastBlock
+        } = await fetchNewMessages(newFetchingLastBlock)
+        newFetchingLastBlock = newLastBlock
+
+        if (newReceivedMessages.length > 0) {
+          fetchingSpinner.stop()
+          newReceivedMessages.forEach(displayMessage)
+          fetchingSpinner = ora('Fetching messages persistently...').start()
+        }
+
+        setTimeout(fetchNewMessagesLoop, 3000)
+      } catch (err) {
+        console.log(err)
+        setTimeout(fetchNewMessagesLoop, 3000)
+      }
+    }, 3000)
+  } else {
+    const fetchingSpinner = ora('Fetching new messages...').start()
+
+    const { newReceivedMessages } = await fetchNewMessages()
+
+    const newMessagesNum = newReceivedMessages.length
+    fetchingSpinner.succeed(newMessagesNum > 0
+      ? `Fetched ${newMessagesNum} new message(s)`
+      : 'Inbox is up to date')
+
+    newReceivedMessages.forEach(displayMessage)
+
+    process.exit(0)
+  }
 }
 
 module.exports = handleInbox

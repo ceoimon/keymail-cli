@@ -12,8 +12,10 @@ const {
   unixToday
 } = require('./utils')
 
-async function handleInfo({
+async function handleReplacePreKeys({
   argv,
+  trustbase,
+  web3,
   preKeyStore,
   inquirer
 }) {
@@ -25,7 +27,7 @@ async function handleInfo({
     process.exit(0)
   }
 
-  let username = argv._[1]
+  let username = argv._[1] || argv.use || argv.user || argv.currentUser
   if (!username) {
     username = usernames.length === 1 ? usernames[0] : (await inquirer.prompt([{
       type: 'list',
@@ -36,8 +38,13 @@ async function handleInfo({
     }])).username
   }
 
-  if (!username || !record[username]) {
-    ora().fail('Invalid username')
+  if (!username) {
+    ora().fail('Invalid username.')
+    process.exit(1)
+  }
+
+  if (!record[username] || !await trustbase.isOwner(web3.eth.defaultAccount, username)) {
+    ora().fail('Invalid username, you don\'t own this username.')
     process.exit(1)
   }
 
@@ -94,4 +101,4 @@ async function handleInfo({
   process.exit(0)
 }
 
-module.exports = handleInfo
+module.exports = handleReplacePreKeys

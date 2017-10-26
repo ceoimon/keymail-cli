@@ -36,7 +36,7 @@ async function addPreKeys({
     interval = (await inquirer.prompt([{
       type: 'input',
       name: 'interval',
-      message: 'PreKeys interval',
+      message: 'Pre-keys interval',
       default: 1,
       validate: value => (isNaN(Number(value)) ? 'Must be a number!' : true)
     }])).interval

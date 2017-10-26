@@ -24,7 +24,7 @@ async function handleInfo({
 
   const identityKeyString = await trustbase.getIdentity(username)
   if (Number(identityKeyString) === 0) {
-    ora().info(`Username('${username}') not found`)
+    ora().info(`User('${username}') not found`)
   } else {
     console.log(JSON.stringify({
       username,

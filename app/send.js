@@ -65,9 +65,6 @@ async function handleSend({
   inquirer,
   web3
 }) {
-  let fromUsername = argv.from
-  let toUsername = argv.to
-  let messageIndex = 1
   const recordPath = argv.recordPath
   const record = await fs.readJSON(recordPath)
   const usernames = Object.keys(record)
@@ -76,24 +73,27 @@ async function handleSend({
     process.exit(0)
   }
 
+  let fromUsername = argv.use || argv.user || argv.currentUser
+
   if (!fromUsername) {
-    if (argv._.length > 1) {
-      fromUsername = argv._[1]
-      messageIndex += 1
-    } else {
-      fromUsername = usernames.length === 1 ? usernames[0] : (await inquirer.prompt([{
-        type: 'list',
-        name: 'username',
-        message: 'Select account:',
-        pageSize: 5,
-        choices: usernames
-      }])).username
-    }
+    fromUsername = usernames.length === 1 ? usernames[0] : (await inquirer.prompt([{
+      type: 'list',
+      name: 'username',
+      message: 'Select account:',
+      pageSize: 5,
+      choices: usernames
+    }])).username
   }
-  if (!fromUsername || !record[fromUsername]) {
-    ora().fail('Invalid account username')
+
+  if (!fromUsername) {
+    ora().fail('Invalid username.')
     process.exit(1)
   }
+  if (!record[fromUsername] || !await trustbase.isOwner(web3.eth.defaultAccount, fromUsername)) {
+    ora().fail('Invalid username, you don\'t own this account.')
+    process.exit(1)
+  }
+
   const fromUsernameHash = web3.utils.sha3(fromUsername)
 
   const userStoragePath = path.resolve(argv.storagePath, `./${fromUsernameHash}`)
@@ -115,30 +115,29 @@ async function handleSend({
     return fuzzyResult.map(e => e.original)
   }
 
-  if (!toUsername) {
-    if (argv._.length > 1) {
-      toUsername = argv.from ? argv._[1] : argv._[2]
-      messageIndex += 1
-    } else if (contactNames.length === 0) {
-      toUsername = (await inquirer.prompt([{
-        type: 'input',
-        name: 'username',
-        message: 'Recipient:',
-        validate: val => (val ? true : 'Recipient cannot be empty!')
-      }])).username
-    } else {
-      toUsername = (await inquirer.prompt([{
-        type: 'autocomplete',
-        name: 'username',
-        suggestOnly: true,
-        message: 'Recipient:',
-        source: searchContacts,
-        pageSize: 5,
-        noResultText: 'Press Enter to start a new conversation with him!',
-        validate: val => (val ? true : 'Recipient cannot be empty!')
-      }])).username
-    }
+  let toUsername = ''
+  if (argv._.length > 1) {
+    toUsername = argv._[1]
+  } else if (contactNames.length === 0) {
+    toUsername = (await inquirer.prompt([{
+      type: 'input',
+      name: 'username',
+      message: 'Recipient:',
+      validate: val => (val ? true : 'Recipient cannot be empty!')
+    }])).username
+  } else {
+    toUsername = (await inquirer.prompt([{
+      type: 'autocomplete',
+      name: 'username',
+      suggestOnly: true,
+      message: 'Recipient:',
+      source: searchContacts,
+      pageSize: 5,
+      noResultText: 'Press Enter to start a new conversation with him!',
+      validate: val => (val ? true : 'Recipient cannot be empty!')
+    }])).username
   }
+
   if (!toUsername) {
     ora().fail('Invalid toUsername')
     process.exit(1)
@@ -150,7 +149,7 @@ async function handleSend({
     process.exit(1)
   }
 
-  let message = argv._[messageIndex]
+  let message = argv._.length > 2 ? argv._[2] : ''
   if (!message) {
     message = (await inquirer.prompt([{
       type: 'input',
@@ -159,8 +158,9 @@ async function handleSend({
       validate: val => (val ? true : 'Message cannot be empty!')
     }])).message
   }
+
   if (!message) {
-    ora().fail('Invalid message')
+    ora().fail('Message cannot be empty!')
     process.exit(1)
   }
 
@@ -169,31 +169,43 @@ async function handleSend({
   const box = new Cryptobox.Cryptobox(fileStore, 0)
   await box.load()
 
-  const preKeyBundle = await getPreKeyBundle({
-    trustbase,
-    preKeyStore,
-    username: toUsername
-  })
 
   // Try to load local session and save to cache..
-  await box.session_load(toUsernameHash).catch(() => {})
+  const session = await box.session_load(toUsernameHash).catch(() => null)
 
-  const encryptedMessage = await box.encrypt(toUsernameHash, message, preKeyBundle.serialise())
-  const sedingSpinner = ora('Sending...').start()
-  await messages.publish('proteus', fromUsername, sodium.to_hex(new Uint8Array(encryptedMessage)))
-  sedingSpinner.succeed('Sent')
+  if (!session) {
+    const preKeyBundle = await getPreKeyBundle({
+      trustbase,
+      preKeyStore,
+      username: toUsername
+    })
+    // new conversation, send 'hello message pack'
+    const encryptedMessage = await box.encrypt(toUsernameHash, JSON.stringify({
+      message,
+      username: fromUsername
+    }), preKeyBundle.serialise())
+    const sedingSpinner = ora('Sending...').start()
+    await messages.publish('keymail:hello', fromUsername, sodium.to_hex(new Uint8Array(encryptedMessage)))
+    sedingSpinner.succeed('Sent')
 
-  // save contact
-  if (contactNames.length === 0) {
-    await fs.writeJSON(userContactsPath, {
-      [toUsernameHash]: toUsername
-    })
-  } else if (!contacts[toUsernameHash]) {
-    await fs.writeJSON(userContactsPath, {
-      ...contacts,
-      [toUsernameHash]: toUsername
-    })
+    // save contact
+    if (contactNames.length === 0) {
+      await fs.writeJSON(userContactsPath, {
+        [toUsernameHash]: toUsername
+      })
+    } else if (!contacts[toUsernameHash]) {
+      await fs.writeJSON(userContactsPath, {
+        ...contacts,
+        [toUsernameHash]: toUsername
+      })
+    }
+  } else {
+    const encryptedMessage = await box.encrypt(toUsernameHash, message)
+    const sedingSpinner = ora('Sending...').start()
+    await messages.publish('keymail', fromUsername, sodium.to_hex(new Uint8Array(encryptedMessage)))
+    sedingSpinner.succeed('Sent')
   }
+
   process.exit(0)
 }
 

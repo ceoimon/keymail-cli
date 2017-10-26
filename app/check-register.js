@@ -27,14 +27,15 @@ async function handleCheckRegister({
   const pendingRecordUsernames = Object.keys(pendingRecords)
 
   const hash = argv.hash
-  if (hash) {
+
+  if (argv._.length > 1) {
+    username = argv._[1]
+  } else if (hash) {
     username = pendingRecordUsernames.find(name => pendingRecords[name].hash === hash)
     if (!username) {
       ora().fail(`Register record for transaction(${hash}) was not found on your machine`)
       process.exit(0)
     }
-  } else if (argv._.length > 1) {
-    username = argv._[1]
   } else if (pendingRecordUsernames.length === 1) {
     username = pendingRecordUsernames[0]
   } else if (pendingRecordUsernames.length > 0) {
@@ -85,12 +86,13 @@ async function handleCheckRegister({
   const waitTxSpinner = ora('Waiting for transaction')
   waitTxSpinner.start()
 
-  const waitForTransactionReceipt = async () => {
+  const waitForTransactionReceipt = async (counter = 0) => {
     const receipt = await web3.eth.getTransactionReceipt(transactionHash)
-    if (receipt !== null) {
+    if (counter >= 3 && receipt !== null) {
       delete pendingRecords[username]
       await fs.writeJSON(pendingRecordPath, pendingRecords)
-      if (receipt.logs.length > 0) {
+      const registeredIdentityKeyString = await trustbase.getIdentity(username)
+      if (registeredIdentityKeyString === `0x${identityKeyPair.public_key.fingerprint()}`) {
         waitTxSpinner.succeed('Registration success!')
 
         await createAccount({
@@ -115,7 +117,11 @@ async function handleCheckRegister({
       process.exit(0)
     }
 
-    setTimeout(waitForTransactionReceipt, 1000)
+    if (counter === 50) {
+      throw new Error('Transaction was not mined within 50 blocks, please make sure your transaction was properly send. Be aware that it might still be mined!')
+    }
+
+    setTimeout(waitForTransactionReceipt, 1000, counter + 1)
   }
 
   await waitForTransactionReceipt()
