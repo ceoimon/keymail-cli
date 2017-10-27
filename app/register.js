@@ -68,9 +68,9 @@ async function handleRegister({
   const transactionSpinner = ora('Creating transaction').start()
   const waitTxSpinner = ora('Waiting for transaction')
 
-  const newIdentityKeyString = identityKeyPair.public_key.fingerprint()
+  const newIdentityKeyString = `0x${identityKeyPair.public_key.fingerprint()}`
 
-  trustbase.register(username, identityKeyPair.public_key.fingerprint())
+  trustbase.register(username, newIdentityKeyString)
     .on('transactionHash', async (transactionHash) => {
       transactionSpinner.succeed(`Transaction created: ${transactionHash}`)
       const recordSpinner = ora('Saving register record').start()
@@ -96,7 +96,7 @@ async function handleRegister({
       if (confirmationNumber === 3) {
         await fs.writeJSON(pendingRecordPath, pendingRecords)
         const registeredIdentityKeyString = await trustbase.getIdentity(username)
-        if (registeredIdentityKeyString === `0x${newIdentityKeyString}`) {
+        if (registeredIdentityKeyString === newIdentityKeyString) {
           waitTxSpinner.succeed('Registration success!')
 
           await createAccount({

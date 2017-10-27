@@ -185,7 +185,7 @@ async function handleSend({
       username: fromUsername
     }), preKeyBundle.serialise())
     const sedingSpinner = ora('Sending...').start()
-    await messages.publish('keymail:hello', fromUsername, sodium.to_hex(new Uint8Array(encryptedMessage)))
+    await messages.publish('keymail:hello', fromUsername, `0x${sodium.to_hex(new Uint8Array(encryptedMessage))}`)
     sedingSpinner.succeed('Sent')
 
     // save contact
@@ -202,7 +202,7 @@ async function handleSend({
   } else {
     const encryptedMessage = await box.encrypt(toUsernameHash, message)
     const sedingSpinner = ora('Sending...').start()
-    await messages.publish('keymail', fromUsername, sodium.to_hex(new Uint8Array(encryptedMessage)))
+    await messages.publish('keymail', fromUsername, `0x${sodium.to_hex(new Uint8Array(encryptedMessage))}`)
     sedingSpinner.succeed('Sent')
   }
 
