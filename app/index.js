@@ -154,7 +154,8 @@ const argv = yargs
     provider: {
       alias: 'p',
       describe: 'RPC provider url',
-      demandOption: process.env.NODE_ENV !== 'development',
+      default: 'https://rinkeby.infura.io',
+      // demandOption: process.env.NODE_ENV !== 'development',
       global: true
     },
     user: {
@@ -171,6 +172,7 @@ const argv = yargs
     },
     'wallet-mnemonic': {
       alias: ['wm', 'mnemonic'],
+      default: 'donkey guess rain range must chef clump obvious issue still vast ask',
       describe: 'Mnemonic for HD Wallet',
       global: true
     },
