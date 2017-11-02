@@ -2,60 +2,19 @@ const path = require('path')
 const fs = require('fs-extra')
 const ora = require('ora')
 
-const sodium = require('libsodium-wrappers-sumo')
-
+const Proteus = require('wire-webapp-proteus')
 const Cryptobox = require('wire-webapp-cryptobox')
 const { StoreEngine: { FileEngine } } = require('@wireapp/store-engine')
 
 const fuzzy = require('fuzzy')
 
 const MyCRUDStore = require('./MyCRUDStore')
-const MyPreKeyBundle = require('./MyPreKeyBundle')
+const MyEnvelope = require('./MyEnvelope')
 const {
-  unixToday,
-  publicKeyFromHexStr,
-  identityKeyFromHexStr
+  getPreKey,
+  getPreKeyBundle,
+  padTo512Bytes
 } = require('./utils')
-
-async function getPreKeyBundle({
-  trustbase,
-  preKeyStore,
-  username
-}) {
-  const identityKeyString = await trustbase.getIdentity(username)
-  const {
-    interval,
-    lastPrekeysDate
-  } = await preKeyStore.getMetaData(username)
-
-  const bytes32Zero = '0x0000000000000000000000000000000000000000000000000000000000000000'
-
-  let prekeyPublicKeyString = bytes32Zero
-  let prekeyID = unixToday()
-  if (prekeyID > lastPrekeysDate) {
-    prekeyPublicKeyString = await preKeyStore.getPrekey(username, 65535)
-    prekeyID = 65535
-  } else {
-    const limitDay = prekeyID - interval
-    while (prekeyID > limitDay && prekeyPublicKeyString === bytes32Zero) {
-      // eslint-disable-next-line
-      prekeyPublicKeyString = await preKeyStore.getPrekey(username, prekeyID)
-      prekeyID -= 1
-    }
-    prekeyID += 1
-
-    // If not found, use last-resort prekey
-    if (prekeyPublicKeyString === bytes32Zero) {
-      prekeyPublicKeyString = await preKeyStore.getPrekey(username, 65535)
-      prekeyID = 65535
-    }
-  }
-
-  const prekeyPublicKey = publicKeyFromHexStr(prekeyPublicKeyString.slice(2))
-  const identityKey = identityKeyFromHexStr(identityKeyString.slice(2))
-
-  return MyPreKeyBundle.new(identityKey, prekeyPublicKey, prekeyID)
-}
 
 async function handleSend({
   argv,
@@ -73,9 +32,9 @@ async function handleSend({
     process.exit(0)
   }
 
-  let fromUsername = argv.use || argv.user || argv.currentUser
+  let fromUsername = argv.use || argv.user || argv.currentUser || ''
 
-  if (!fromUsername) {
+  if (fromUsername.length === 0) {
     fromUsername = usernames.length === 1 ? usernames[0] : (await inquirer.prompt([{
       type: 'list',
       name: 'username',
@@ -85,7 +44,7 @@ async function handleSend({
     }])).username
   }
 
-  if (!fromUsername) {
+  if (fromUsername.length === 0) {
     ora().fail('Invalid username.')
     process.exit(1)
   }
@@ -138,7 +97,7 @@ async function handleSend({
     }])).username
   }
 
-  if (!toUsername) {
+  if (toUsername.length === 0) {
     ora().fail('Invalid toUsername')
     process.exit(1)
   }
@@ -150,7 +109,7 @@ async function handleSend({
   }
 
   let message = argv._.length > 2 ? argv._[2] : ''
-  if (!message) {
+  if (message.length === 0) {
     message = (await inquirer.prompt([{
       type: 'input',
       name: 'message',
@@ -159,7 +118,7 @@ async function handleSend({
     }])).message
   }
 
-  if (!message) {
+  if (message.length === 0) {
     ora().fail('Message cannot be empty!')
     process.exit(1)
   }
@@ -172,37 +131,106 @@ async function handleSend({
 
   // Try to load local session and save to cache..
   const session = await box.session_load(toUsernameHash).catch(() => null)
+  const {
+    id: preKeyID,
+    publicKey: preKeyPublicKey
+  } = await getPreKey({
+    preKeyStore,
+    usernameHash: toUsernameHash
+  })
 
   if (!session) {
     const preKeyBundle = await getPreKeyBundle({
       trustbase,
-      preKeyStore,
-      username: toUsername
+      usernameHash: toUsernameHash,
+      preKeyID,
+      preKeyPublicKey
     })
     // new conversation, send 'hello message pack'
-    const encryptedMessage = await box.encrypt(toUsernameHash, JSON.stringify({
+    const {
+      result: paddedMessage,
+      messageByteLength
+    } = padTo512Bytes(JSON.stringify({
       message,
       username: fromUsername
-    }), preKeyBundle.serialise())
+    }))
+
+    const encryptedMessage = await box.encrypt(
+      toUsernameHash,
+      paddedMessage,
+      preKeyBundle.serialise()
+    )
+    const envelope = Proteus.message.Envelope.deserialise(encryptedMessage)
+    const preKeyMessage = envelope.message
+    const cipherMessage = preKeyMessage.message
+    const header = {
+      mac: envelope.mac, // envelope signature
+      baseKey: preKeyMessage.base_key,
+      identityKey: preKeyMessage.identity_key,
+      isPreKeyMessage: 1,
+      messageType: 0,
+      messageByteLength
+    }
+
+    const myEnvelope = new MyEnvelope(header, cipherMessage)
     const sedingSpinner = ora('Sending...').start()
-    await messages.publish('keymail:hello', fromUsername, `0x${sodium.to_hex(new Uint8Array(encryptedMessage))}`)
+    await messages.publish('keymail', fromUsername, `0x${myEnvelope.encrypt(box.identity, preKeyID, preKeyPublicKey)}`)
     sedingSpinner.succeed('Sent')
 
     // save contact
-    if (contactNames.length === 0) {
-      await fs.writeJSON(userContactsPath, {
-        [toUsernameHash]: toUsername
-      })
-    } else if (!contacts[toUsernameHash]) {
-      await fs.writeJSON(userContactsPath, {
-        ...contacts,
-        [toUsernameHash]: toUsername
-      })
+    if (!argv.hash) {
+      if (contactNames.length === 0) {
+        await fs.writeJSON(userContactsPath, {
+          [toUsernameHash]: toUsername
+        })
+      } else if (!contacts[toUsernameHash]) {
+        await fs.writeJSON(userContactsPath, {
+          ...contacts,
+          [toUsernameHash]: toUsername
+        })
+      }
     }
   } else {
-    const encryptedMessage = await box.encrypt(toUsernameHash, message)
+    const {
+      result: paddedMessage,
+      messageByteLength
+    } = padTo512Bytes(message)
+    const encryptedMessage = await box.encrypt(
+      toUsernameHash,
+      paddedMessage
+    )
+    const envelope = Proteus.message.Envelope.deserialise(encryptedMessage)
+
+    const myEnvelope = (() => {
+      if (envelope.message.message) {
+        const preKeyMessage = envelope.message
+        const cipherMessage = preKeyMessage.message
+        const header = {
+          mac: envelope.mac, // envelope signature
+          baseKey: preKeyMessage.base_key,
+          identityKey: preKeyMessage.identity_key,
+          isPreKeyMessage: 1,
+          messageType: 1,
+          messageByteLength
+        }
+
+        return new MyEnvelope(header, cipherMessage)
+      }
+
+      const cipherMessage = envelope.message
+      const header = {
+        mac: envelope.mac, // envelope signature
+        baseKey: Proteus.keys.KeyPair.new().public_key, // generate a new one
+        identityKey: box.identity.public_key,
+        isPreKeyMessage: 0,
+        messageType: 1,
+        messageByteLength
+      }
+
+      return new MyEnvelope(header, cipherMessage)
+    })()
     const sedingSpinner = ora('Sending...').start()
-    await messages.publish('keymail', fromUsername, `0x${sodium.to_hex(new Uint8Array(encryptedMessage))}`)
+    await messages.publish('keymail', fromUsername, `0x${myEnvelope.encrypt(box.identity, preKeyID, preKeyPublicKey)}`)
     sedingSpinner.succeed('Sent')
   }
 

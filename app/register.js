@@ -2,7 +2,7 @@ const path = require('path')
 const fs = require('fs-extra')
 const ora = require('ora')
 
-const sodium = require('libsodium-wrappers-sumo')
+const sodium = require('libsodium-wrappers')
 const Proteus = require('wire-webapp-proteus')
 
 const checkRegister = require('./check-register')

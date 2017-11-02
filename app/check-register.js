@@ -3,7 +3,7 @@ const path = require('path')
 const ora = require('ora')
 const fuzzy = require('fuzzy')
 
-const sodium = require('libsodium-wrappers-sumo')
+const sodium = require('libsodium-wrappers')
 const Proteus = require('wire-webapp-proteus')
 
 const createAccount = require('./create-account')

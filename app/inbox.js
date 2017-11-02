@@ -2,12 +2,22 @@ const fs = require('fs-extra')
 const path = require('path')
 const ora = require('ora')
 
-const sodium = require('libsodium-wrappers-sumo')
+const Proteus = require('wire-webapp-proteus')
 
 const Cryptobox = require('wire-webapp-cryptobox')
 const { StoreEngine: { FileEngine } } = require('@wireapp/store-engine')
+const sodium = require('libsodium-wrappers')
 
 const MyCRUDStore = require('./MyCRUDStore')
+const MyEnvelope = require('./MyEnvelope')
+
+const {
+  getEmptyEnvelope,
+  identityKeyFromHexStr,
+  unpad512BytesMessage
+} = require('./utils')
+
+const PRE_KEY_ID_BYTES_LENGTH = 2
 
 async function handleInbox({
   argv,
@@ -24,9 +34,9 @@ async function handleInbox({
     process.exit(0)
   }
 
-  let username = argv._[1] || argv.use || argv.user || argv.currentUser
+  let username = argv._[1] || argv.use || argv.user || argv.currentUser || ''
 
-  if (!username) {
+  if (username.length === 0) {
     username = usernames.length === 1 ? usernames[0] : (await inquirer.prompt([{
       type: 'list',
       name: 'username',
@@ -36,7 +46,7 @@ async function handleInbox({
     }])).username
   }
 
-  if (!username) {
+  if (username === '') {
     ora().fail('Invalid username.')
     process.exit(1)
   }
@@ -137,52 +147,85 @@ async function handleInbox({
   function deserializeMessage({
     message,
     senderUserHash,
-    messageTypeHash,
-    timestamp
+    messageType,
+    timestamp,
+    messageByteLength
   }) {
-    if (messageTypeHash === web3.utils.sha3('keymail:hello')) {
+    const unpaddedMessage = unpad512BytesMessage(message, messageByteLength)
+    // hello message
+    if (messageType === 0) {
       return deserializeHelloMessage({
-        message,
+        message: unpaddedMessage,
         timestamp,
         senderUserHash
       })
     }
     return {
-      message,
+      message: unpaddedMessage,
       timestamp,
       senderUserHash
     }
   }
 
-  function decryptMessage({
-    messageTypeHash,
+  async function decryptMessage({
     message,
     senderUserHash,
     timestamp
   }) {
+    const identityKeyString = await trustbase.getIdentity(senderUserHash, { isHash: true })
+    const theirIdentityKey = identityKeyFromHexStr(identityKeyString.slice(2))
+    const concatedBuf = sodium.from_hex(message.slice(2)) // Uint8Array
+    const preKeyID = new Uint16Array(concatedBuf.slice(0, PRE_KEY_ID_BYTES_LENGTH).buffer)[0]
+    const preKey = await fileStore.load_prekey(preKeyID)
+    const myEnvelope = MyEnvelope.decrypt(
+      concatedBuf.slice(PRE_KEY_ID_BYTES_LENGTH),
+      preKey,
+      theirIdentityKey
+    )
+    const proteusEnvelope = getEmptyEnvelope()
+    const {
+      mac,
+      baseKey,
+      identityKey,
+      isPreKeyMessage,
+      messageType,
+      messageByteLength
+    } = myEnvelope.header
+    proteusEnvelope.mac = mac
+    proteusEnvelope._message_enc = (() => {
+      if (isPreKeyMessage) {
+        return new Uint8Array(Proteus.message.PreKeyMessage.new(
+          preKeyID,
+          baseKey,
+          identityKey,
+          myEnvelope.cipherMessage
+        ).serialise())
+      }
+      return new Uint8Array(myEnvelope.cipherMessage.serialise())
+    })()
     return box.decrypt(
       senderUserHash,
-      sodium.from_hex(message.slice(2)).buffer
+      proteusEnvelope.serialise()
     )
       .then(decryptedMessage => deserializeMessage({
-        message: sodium.to_string(decryptedMessage),
+        message: decryptedMessage,
         timestamp,
         senderUserHash,
-        messageTypeHash
+        messageType,
+        messageByteLength
       }))
-      .catch(() => null)
   }
 
   async function fetchNewMessages(_lastBlock = lastBlock) {
     const {
       lastBlock: newLastBlock,
       messages: allNewMessages
-    } = await messages.getMessages(['keymail', 'keymail:hello'], _lastBlock > 0 ? {
+    } = await messages.getMessages(['keymail'], _lastBlock > 0 ? {
       fromBlock: _lastBlock
     } : undefined)
 
     const newReceivedMessages = (await Promise.all(allNewMessages
-      .map(message => decryptMessage(message))))
+      .map(message => decryptMessage(message).catch(() => null))))
       .filter(m => m !== null)
 
 

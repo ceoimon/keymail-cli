@@ -4,9 +4,9 @@ const CryptoboxCRUDStore = Cryptobox.store.CryptoboxCRUDStore
 class MyCRUDStore extends CryptoboxCRUDStore {
   // eslint-disable-next-line
   delete_prekey() {}
-  deletePrekey(prekeyID) {
-    return this.engine.delete(CryptoboxCRUDStore.STORES.PRE_KEYS, prekeyID.toString())
-      .then(() => prekeyID)
+  deletePrekey(preKeyID) {
+    return this.engine.delete(CryptoboxCRUDStore.STORES.PRE_KEYS, preKeyID.toString())
+      .then(() => preKeyID)
   }
 }
 

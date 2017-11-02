@@ -212,7 +212,7 @@ async-eventemitter@^0.2.2:
   dependencies:
     async "^2.4.0"
 
-"async-eventemitter@github:ahultgren/async-eventemitter#fa06e39e56786ba541c180061dbf2c0a5bbf951c":
+async-eventemitter@ahultgren/async-eventemitter#fa06e39e56786ba541c180061dbf2c0a5bbf951c:
   version "0.2.3"
   resolved "https://codeload.github.com/ahultgren/async-eventemitter/tar.gz/fa06e39e56786ba541c180061dbf2c0a5bbf951c"
   dependencies:
@@ -2632,21 +2632,21 @@ libsodium-sumo@0.5.4:
   version "0.5.4"
   resolved "https://registry.yarnpkg.com/libsodium-sumo/-/libsodium-sumo-0.5.4.tgz#08af4af945754ee9daf2de9d1385c9fc0e64cec0"
 
-libsodium-sumo@0.7.2:
-  version "0.7.2"
-  resolved "https://registry.yarnpkg.com/libsodium-sumo/-/libsodium-sumo-0.7.2.tgz#7aee8642cad53dabfac8ed19c42ebacb985a21ba"
-
 libsodium-wrappers-sumo@0.5.4:
   version "0.5.4"
   resolved "https://registry.yarnpkg.com/libsodium-wrappers-sumo/-/libsodium-wrappers-sumo-0.5.4.tgz#ee69f6c960965e0d7d65cc4282c2fb33485d06a2"
   dependencies:
     libsodium-sumo "0.5.4"
 
-libsodium-wrappers-sumo@^0.7.2:
+libsodium-wrappers@^0.7.2:
   version "0.7.2"
-  resolved "https://registry.yarnpkg.com/libsodium-wrappers-sumo/-/libsodium-wrappers-sumo-0.7.2.tgz#a1ffe7e30f7132444a27d9232e618a94fa77a0c7"
+  resolved "https://registry.yarnpkg.com/libsodium-wrappers/-/libsodium-wrappers-0.7.2.tgz#d10c60f1698fee4c95c80921697b8e0490f996b0"
   dependencies:
-    libsodium-sumo "0.7.2"
+    libsodium "0.7.2"
+
+libsodium@0.7.2:
+  version "0.7.2"
+  resolved "https://registry.yarnpkg.com/libsodium/-/libsodium-0.7.2.tgz#aae809057f637b5c43eb08fa0445f987735df854"
 
 lint-staged@^4.3.0:
   version "4.3.0"
@@ -4359,7 +4359,7 @@ window-size@^0.2.0:
   version "0.2.0"
   resolved "https://registry.yarnpkg.com/window-size/-/window-size-0.2.0.tgz#b4315bb4214a3d7058ebeee892e13fa24d98b075"
 
-wire-webapp-cbor@2.1.5:
+wire-webapp-cbor@2.1.5, wire-webapp-cbor@^2.1.5:
   version "2.1.5"
   resolved "https://registry.yarnpkg.com/wire-webapp-cbor/-/wire-webapp-cbor-2.1.5.tgz#742912cb40b037dcc7125ce4c554ea2d6d398064"
 

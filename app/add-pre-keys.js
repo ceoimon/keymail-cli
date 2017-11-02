@@ -55,12 +55,12 @@ async function addPreKeys({
   const spinner = ora('Uploading pre-keys').start()
 
   const preKeys = generatePrekeys(fromUnixDay, interval, numOfPreKeys)
-  const prekeysPublicKeys = preKeys.map(prekey => `0x${prekey.key_pair.public_key.fingerprint()}`)
+  const preKeysPublicKeys = preKeys.map(preKey => `0x${preKey.key_pair.public_key.fingerprint()}`)
   const lastResortPrekey = PreKey.last_resort() // id is 65535
   lastResortPrekey.key_pair = preKeys[preKeys.length - 1].key_pair
   await fileStore.save_prekeys(preKeys.concat(lastResortPrekey))
 
-  await preKeyStore.uploadPrekeys(username, prekeysPublicKeys, {
+  await preKeyStore.uploadPrekeys(username, preKeysPublicKeys, {
     interval,
     fromUnixDay
   })

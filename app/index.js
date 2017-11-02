@@ -56,6 +56,7 @@ const argv = yargs
   .command('register', 'Register a new account', (_yargs) => {
     _yargs
       .usage('Usage: $0 register [username]')
+      .string('_')
       .options({
         ...preKeysOptions
       })
@@ -63,6 +64,7 @@ const argv = yargs
   .command('check-register', 'Check registration status', (_yargs) => {
     _yargs
       .usage('Usage: $0 check-register [options] [username]')
+      .string('_')
       .options({
         hash: {
           alias: 'h',
@@ -74,14 +76,17 @@ const argv = yargs
   .command('info', 'Get public key for a user', (_yargs) => {
     _yargs
       .usage('Usage: $0 info [username]')
+      .string('_')
   })
   .command('use', 'Set current using user', (_yargs) => {
     _yargs
       .usage('Usage: $0 use [username]')
+      .string('_')
   })
   .command('send', 'Send a message', (_yargs) => {
     _yargs
       .usage('Usage: $0 send [to] [message]')
+      .string('_')
       .options({
         use: {
           alias: 'u',
@@ -97,6 +102,7 @@ const argv = yargs
   .command('inbox', 'Check your inbox', (_yargs) => {
     _yargs
       .usage('Usage: $0 inbox [username]')
+      .string('_')
       .options({
         use: {
           alias: 'u',
@@ -115,6 +121,7 @@ const argv = yargs
   .command('replace-pre-keys', 'Replace your pre-keys', (_yargs) => {
     _yargs
       .usage('Usage: $0 replace-pre-keys [username]')
+      .string('_')
       .options({
         use: {
           alias: 'u',
