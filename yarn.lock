@@ -4150,9 +4150,9 @@ trim@0.0.1:
   version "0.0.1"
   resolved "https://registry.yarnpkg.com/trim/-/trim-0.0.1.tgz#5858547f6b290757ee95cccc666fb50084c460dd"
 
-trustbase@^0.0.5:
-  version "0.0.5"
-  resolved "https://registry.yarnpkg.com/trustbase/-/trustbase-0.0.5.tgz#d3c41a676558858ac838811813212e2878943106"
+trustbase@^0.0.6:
+  version "0.0.6"
+  resolved "https://registry.yarnpkg.com/trustbase/-/trustbase-0.0.6.tgz#fdb4bbb9c492ad14764599798db77a371666c569"
   dependencies:
     bip39 "^2.4.0"
     ethereumjs-wallet "^0.6.0"
