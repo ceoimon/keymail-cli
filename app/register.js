@@ -3,7 +3,7 @@ const fs = require('fs-extra')
 const ora = require('ora')
 
 const sodium = require('libsodium-wrappers')
-const Proteus = require('wire-webapp-proteus')
+const Proteus = require('proteus-hd')
 
 const checkRegister = require('./check-register')
 const createAccount = require('./create-account')
@@ -39,7 +39,7 @@ async function handleRegister({
   const storagePath = argv.storagePath
   const userStoragePath = path.resolve(storagePath, `./${usernameHash}`)
   if ((await fs.exists(userStoragePath))) {
-    ora().info(`Found identity for '${username}' locally`)
+    ora().info(`Found identity for '${username}' on local`)
     process.exit(0)
   }
 

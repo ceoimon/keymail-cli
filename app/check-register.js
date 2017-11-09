@@ -4,7 +4,7 @@ const ora = require('ora')
 const fuzzy = require('fuzzy')
 
 const sodium = require('libsodium-wrappers')
-const Proteus = require('wire-webapp-proteus')
+const Proteus = require('proteus-hd')
 
 const createAccount = require('./create-account')
 
@@ -61,7 +61,7 @@ async function handleCheckRegister({
   const storagePath = argv.storagePath
   const userStoragePath = path.resolve(storagePath, `./${usernameHash}`)
   if ((await fs.exists(userStoragePath))) {
-    ora().info(`Found identity for '${username}' locally`)
+    ora().info(`Found identity for '${username}' on local`)
     process.exit(0)
   }
 

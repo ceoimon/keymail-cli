@@ -1,4 +1,4 @@
-const Proteus = require('wire-webapp-proteus')
+const Proteus = require('proteus-hd')
 const ora = require('ora')
 
 const { unixToday } = require('./utils')

@@ -2,22 +2,19 @@ const fs = require('fs-extra')
 const path = require('path')
 const ora = require('ora')
 
-const Proteus = require('wire-webapp-proteus')
-
-const Cryptobox = require('wire-webapp-cryptobox')
+const Cryptobox = require('cryptobox-hd')
 const { StoreEngine: { FileEngine } } = require('@wireapp/store-engine')
 const sodium = require('libsodium-wrappers')
 
 const MyCRUDStore = require('./MyCRUDStore')
-const MyEnvelope = require('./MyEnvelope')
+const KeymailMessage = require('./KeymailMessage')
 
 const {
-  getEmptyEnvelope,
-  identityKeyFromHexStr,
-  unpad512BytesMessage
-} = require('./utils')
-
-const PRE_KEY_ID_BYTES_LENGTH = 2
+  MESSAGE_TYPES: {
+    HELLO_MESSAGE,
+    NORMAL_MESSAGE
+  }
+} = require('./constants')
 
 async function handleInbox({
   argv,
@@ -69,7 +66,7 @@ async function handleInbox({
 
   function displayMessage(message) {
     const senderUsernameHash = message.senderUserHash
-    console.log(`${new Date(message.timestamp * 1000)} - ${contacts[senderUsernameHash] || `Stranger(${usernameHash})`}: ${message.message}`)
+    console.log(`${new Date(message.timestamp * 1000)} - ${contacts[senderUsernameHash] || `Stranger(${usernameHash})`}: ${message.plainText}`)
   }
 
   const engine = new FileEngine(userStoragePath)
@@ -90,15 +87,15 @@ async function handleInbox({
   } = isInboxRecordExist ? await fs.readJSON(inboxPath) : {}
 
   const fromUser = argv.from
-  let fromUsernameHash
+  let filterFromUsernameHash
   if (fromUser) {
     const isHash = fromUser.startsWith('0x')
       ? fromUser === `0x${Number(fromUser).toString(16)}`
       : fromUser === `${Number(`0x${fromUser}`).toString(16)}`
-    fromUsernameHash = isHash ? fromUser : web3.utils.sha3(fromUser)
+    filterFromUsernameHash = isHash ? fromUser : web3.utils.sha3(fromUser)
   }
-  const filteredReceivedMessages = fromUsernameHash
-    ? receivedMessages.filter(({ senderUserHash }) => senderUserHash === fromUsernameHash)
+  const filteredReceivedMessages = filterFromUsernameHash
+    ? receivedMessages.filter(({ senderUserHash }) => senderUserHash === filterFromUsernameHash)
     : receivedMessages
 
   filteredReceivedMessages.forEach(displayMessage)
@@ -109,61 +106,66 @@ async function handleInbox({
     process.exit(0)
   }
 
-  async function deserializeHelloMessage({
-    message,
+  async function processHelloMessage({
+    fromUsername,
+    plainText,
     timestamp,
     senderUserHash
   }) {
-    // if something went wrong, just throw and drop the message
-    const {
-      message: actualMessage,
-      username: helloFromUsername
-    } = JSON.parse(message)
+    const fromUsernameHash = web3.utils.sha3(fromUsername)
 
-    const helloFromUsernameHash = web3.utils.sha3(helloFromUsername)
-
-    if (helloFromUsernameHash !== senderUserHash) {
+    if (fromUsernameHash !== senderUserHash) {
       throw new Error('Invalid hello message')
     }
 
     if (Object.keys(contacts).length === 0) {
       await fs.writeJSON(userContactsPath, {
-        [senderUserHash]: helloFromUsername
+        [senderUserHash]: fromUsername
       })
     } else if (!contacts[senderUserHash]) {
       await fs.writeJSON(userContactsPath, {
         ...contacts,
-        [senderUserHash]: helloFromUsername
+        [senderUserHash]: fromUsername
       })
     }
-    contacts[senderUserHash] = helloFromUsername
+    contacts[senderUserHash] = fromUsername
+
     return {
-      message: actualMessage,
+      plainText,
       timestamp,
       senderUserHash
     }
   }
 
   function deserializeMessage({
-    message,
+    messageBuf,
     senderUserHash,
-    messageType,
-    timestamp,
-    messageByteLength
+    timestamp
   }) {
-    const unpaddedMessage = unpad512BytesMessage(message, messageByteLength)
-    // hello message
-    if (messageType === 0) {
-      return deserializeHelloMessage({
-        message: unpaddedMessage,
-        timestamp,
-        senderUserHash
-      })
-    }
-    return {
-      message: unpaddedMessage,
-      timestamp,
-      senderUserHash
+    const {
+      header: {
+        messageType,
+        fromUsername
+      },
+      plainText
+    } = KeymailMessage.deserialize(messageBuf)
+
+    switch (messageType) {
+      case HELLO_MESSAGE:
+        return processHelloMessage({
+          fromUsername,
+          plainText,
+          timestamp,
+          senderUserHash
+        })
+      case NORMAL_MESSAGE:
+        return {
+          plainText,
+          timestamp,
+          senderUserHash
+        }
+      default:
+        throw new Error('Unknown message type')
     }
   }
 
@@ -172,47 +174,14 @@ async function handleInbox({
     senderUserHash,
     timestamp
   }) {
-    const identityKeyString = await trustbase.getIdentity(senderUserHash, { isHash: true })
-    const theirIdentityKey = identityKeyFromHexStr(identityKeyString.slice(2))
-    const concatedBuf = sodium.from_hex(message.slice(2)) // Uint8Array
-    const preKeyID = new Uint16Array(concatedBuf.slice(0, PRE_KEY_ID_BYTES_LENGTH).buffer)[0]
-    const preKey = await fileStore.load_prekey(preKeyID)
-    const myEnvelope = MyEnvelope.decrypt(
-      concatedBuf.slice(PRE_KEY_ID_BYTES_LENGTH),
-      preKey,
-      theirIdentityKey
-    )
-    const proteusEnvelope = getEmptyEnvelope()
-    const {
-      mac,
-      baseKey,
-      identityKey,
-      isPreKeyMessage,
-      messageType,
-      messageByteLength
-    } = myEnvelope.header
-    proteusEnvelope.mac = mac
-    proteusEnvelope._message_enc = (() => {
-      if (isPreKeyMessage) {
-        return new Uint8Array(Proteus.message.PreKeyMessage.new(
-          preKeyID,
-          baseKey,
-          identityKey,
-          myEnvelope.cipherMessage
-        ).serialise())
-      }
-      return new Uint8Array(myEnvelope.cipherMessage.serialise())
-    })()
     return box.decrypt(
       senderUserHash,
-      proteusEnvelope.serialise()
+      sodium.from_hex(message.slice(2)).buffer
     )
       .then(decryptedMessage => deserializeMessage({
-        message: decryptedMessage,
+        messageBuf: decryptedMessage.buffer,
         timestamp,
-        senderUserHash,
-        messageType,
-        messageByteLength
+        senderUserHash
       }))
   }
 
@@ -239,7 +208,8 @@ async function handleInbox({
     return {
       newLastBlock,
       newReceivedMessages: fromUser
-        ? newReceivedMessages.filter(({ senderUserHash }) => senderUserHash === fromUsernameHash)
+        ? newReceivedMessages
+          .filter(({ senderUserHash }) => senderUserHash === filterFromUsernameHash)
         : newReceivedMessages
     }
   }
