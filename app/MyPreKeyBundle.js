@@ -1,7 +1,7 @@
 const {
   PreKeyBundle,
   PreKey
-} = require('proteus-hd').keys
+} = require('wire-webapp-proteus').keys
 
 class MyPreKeyBundle extends PreKeyBundle {
   static new(publicIdentityKey, preKeyPublicKey, keyID) {

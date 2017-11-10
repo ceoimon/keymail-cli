@@ -1,4 +1,4 @@
-const Cryptobox = require('cryptobox-hd')
+const Cryptobox = require('wire-webapp-cryptobox')
 const CryptoboxCRUDStore = Cryptobox.store.CryptoboxCRUDStore
 
 class MyCRUDStore extends CryptoboxCRUDStore {

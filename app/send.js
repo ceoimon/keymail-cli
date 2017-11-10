@@ -2,25 +2,19 @@ const path = require('path')
 const fs = require('fs-extra')
 const ora = require('ora')
 
-const Cryptobox = require('cryptobox-hd')
+const Proteus = require('wire-webapp-proteus')
+const Cryptobox = require('wire-webapp-cryptobox')
 const { StoreEngine: { FileEngine } } = require('@wireapp/store-engine')
-const sodium = require('libsodium-wrappers')
 
 const fuzzy = require('fuzzy')
 
 const MyCRUDStore = require('./MyCRUDStore')
-const KeymailMessage = require('./KeymailMessage')
+const MyEnvelope = require('./MyEnvelope')
 const {
+  getPreKey,
   getPreKeyBundle,
-  unixToday
+  padTo512Bytes
 } = require('./utils')
-
-const {
-  MESSAGE_TYPES: {
-    HELLO_MESSAGE,
-    NORMAL_MESSAGE
-  }
-} = require('./constants')
 
 async function handleSend({
   argv,
@@ -134,39 +128,53 @@ async function handleSend({
   const box = new Cryptobox.Cryptobox(fileStore, 0)
   await box.load()
 
+
   // Try to load local session and save to cache..
-  const session = await box.session_load(toUsernameHash).catch((err) => {
-    if (err.name === 'DecodeError' && err.message === 'Unexpected type') {
-      // we have a corrupted session (old version) on local
-      const sessionStorePath = path.join(userStoragePath, 'sessions', toUsernameHash)
-      return fs.remove(sessionStorePath).then(() => null).catch((removeErr) => {
-        console.error(removeErr)
-        process.exit(1)
-      })
-    }
-    return null
+  const session = await box.session_load(toUsernameHash).catch(() => null)
+  const {
+    id: preKeyID,
+    publicKey: preKeyPublicKey
+  } = await getPreKey({
+    preKeyStore,
+    usernameHash: toUsernameHash
   })
 
   if (!session) {
     const preKeyBundle = await getPreKeyBundle({
       trustbase,
-      preKeyStore,
-      usernameHash: toUsernameHash
+      usernameHash: toUsernameHash,
+      preKeyID,
+      preKeyPublicKey
     })
-    // new conversation, send 'hello message'
-    const messageToSend = new KeymailMessage({
-      fromUsername,
-      messageType: HELLO_MESSAGE
-    }, message)
+    // new conversation, send 'hello message pack'
+    const {
+      result: paddedMessage,
+      messageByteLength
+    } = padTo512Bytes(JSON.stringify({
+      message,
+      username: fromUsername
+    }))
 
     const encryptedMessage = await box.encrypt(
       toUsernameHash,
-      new Uint8Array(messageToSend.serialise()),
+      paddedMessage,
       preKeyBundle.serialise()
     )
+    const envelope = Proteus.message.Envelope.deserialise(encryptedMessage)
+    const preKeyMessage = envelope.message
+    const cipherMessage = preKeyMessage.message
+    const header = {
+      mac: envelope.mac, // envelope signature
+      baseKey: preKeyMessage.base_key,
+      identityKey: preKeyMessage.identity_key,
+      isPreKeyMessage: 1,
+      messageType: 0,
+      messageByteLength
+    }
 
+    const myEnvelope = new MyEnvelope(header, cipherMessage)
     const sedingSpinner = ora('Sending...').start()
-    await messages.publish('keymail', fromUsername, `0x${sodium.to_hex(new Uint8Array(encryptedMessage))}`)
+    await messages.publish('keymail', fromUsername, `0x${myEnvelope.encrypt(box.identity, preKeyID, preKeyPublicKey)}`)
     sedingSpinner.succeed('Sent')
 
     // save contact
@@ -183,19 +191,46 @@ async function handleSend({
       }
     }
   } else {
-    const messageToSend = new KeymailMessage({
-      messageType: NORMAL_MESSAGE
-    }, message)
-
+    const {
+      result: paddedMessage,
+      messageByteLength
+    } = padTo512Bytes(message)
     const encryptedMessage = await box.encrypt(
       toUsernameHash,
-      new Uint8Array(messageToSend.serialise()),
-      null,
-      unixToday()
+      paddedMessage
     )
+    const envelope = Proteus.message.Envelope.deserialise(encryptedMessage)
 
+    const myEnvelope = (() => {
+      if (envelope.message.message) {
+        const preKeyMessage = envelope.message
+        const cipherMessage = preKeyMessage.message
+        const header = {
+          mac: envelope.mac, // envelope signature
+          baseKey: preKeyMessage.base_key,
+          identityKey: preKeyMessage.identity_key,
+          isPreKeyMessage: 1,
+          messageType: 1,
+          messageByteLength
+        }
+
+        return new MyEnvelope(header, cipherMessage)
+      }
+
+      const cipherMessage = envelope.message
+      const header = {
+        mac: envelope.mac, // envelope signature
+        baseKey: Proteus.keys.KeyPair.new().public_key, // generate a new one
+        identityKey: box.identity.public_key,
+        isPreKeyMessage: 0,
+        messageType: 1,
+        messageByteLength
+      }
+
+      return new MyEnvelope(header, cipherMessage)
+    })()
     const sedingSpinner = ora('Sending...').start()
-    await messages.publish('keymail', fromUsername, `0x${sodium.to_hex(new Uint8Array(encryptedMessage))}`)
+    await messages.publish('keymail', fromUsername, `0x${myEnvelope.encrypt(box.identity, preKeyID, preKeyPublicKey)}`)
     sedingSpinner.succeed('Sent')
   }
 

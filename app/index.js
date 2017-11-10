@@ -41,25 +41,11 @@ const preKeysOptions = {
   'pre-key-interval': {
     alias: ['pi', 'preKeyInterval'],
     number: true,
-    default: 1,
-    coerce: (value) => {
-      if (value <= 0) {
-        throw new TypeError('`pre-key-interval` must be greater than 0')
-      }
-      return value
-    },
     describe: 'Interval of new pre-keys '
   },
   'pre-key-number': {
     alias: ['pn', 'preKeyNumber'],
     number: true,
-    default: 100,
-    coerce: (value) => {
-      if (value <= 0) {
-        throw new TypeError('`pre-key-number` must be greater than 0')
-      }
-      return value
-    },
     describe: 'Number of new pre-keys'
   }
 }
