@@ -36,6 +36,8 @@ async function handleReplacePreKeys({
       pageSize: 5,
       choices: usernames
     }])).username
+  } else {
+    ora().info(`Using account: ${username}`)
   }
 
   if (!username) {

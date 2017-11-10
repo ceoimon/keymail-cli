@@ -36,7 +36,9 @@ async function handleUse({
     process.exit(1)
   }
 
-  await fs.writeFile(argv.currentUserPath, username)
+  if (username !== argv.currentUser) {
+    await fs.writeFile(argv.currentUserPath, username)
+  }
 
   ora().succeed(`Now using: ${username}`)
 

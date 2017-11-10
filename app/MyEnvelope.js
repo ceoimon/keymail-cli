@@ -1,8 +1,6 @@
 const {
   keys: {
-    PublicKey,
-    IdentityKey
-    // IdentityKeyPair
+    PublicKey
   },
   message: {
     CipherMessage
@@ -17,27 +15,21 @@ class MyEnvelope {
     this.cipherMessage = cipherMessage
   }
 
-  encrypt(ourIdentityKeyPair, preKeyID, preKeyPublicKey) {
-    const nonce = Buffer.from(sodium.randombytes_buf(sodium.crypto_box_NONCEBYTES))
-    const envelopeBuf = Buffer.from(sodium.crypto_box_easy(
+  encrypt(preKeyID, preKeyPublicKey) {
+    const envelopeBuf = Buffer.from(sodium.crypto_box_seal(
       new Uint8Array(this.serialise()), // binary represent
-      nonce,
-      preKeyPublicKey.pub_curve,
-      ourIdentityKeyPair.secret_key.sec_curve
+      preKeyPublicKey.pub_curve
     ))
     // prepend the pre-key ID and nonce
     const preKeyIDBuf = Buffer.from(Uint16Array.from([preKeyID]).buffer)
-    const concatedBuf = Buffer.concat([preKeyIDBuf, nonce, envelopeBuf]) // Buffer
+    const concatedBuf = Buffer.concat([preKeyIDBuf, envelopeBuf]) // Buffer
     return sodium.to_hex(concatedBuf)
   }
 
-  static decrypt(nonceAndEnvelopeBuf, preKey, theirIdentityKey) {
-    const nonce = nonceAndEnvelopeBuf.slice(0, sodium.crypto_box_NONCEBYTES)
-    const envelopeBuf = nonceAndEnvelopeBuf.slice(sodium.crypto_box_NONCEBYTES)
-    return MyEnvelope.deserialize(sodium.crypto_box_open_easy(
+  static decrypt(envelopeBuf, preKey) {
+    return MyEnvelope.deserialize(sodium.crypto_box_seal_open(
       envelopeBuf,
-      nonce,
-      theirIdentityKey.public_key.pub_curve,
+      preKey.key_pair.public_key.pub_curve,
       preKey.key_pair.secret_key.sec_curve,
       'uint8array'
     ).buffer)
@@ -58,7 +50,7 @@ class MyEnvelope {
     const {
       mac,
       baseKey,
-      identityKey,
+      senderUserHash,
       isPreKeyMessage,
       messageType,
       messageByteLength
@@ -72,9 +64,11 @@ class MyEnvelope {
     e.u8(1)
     baseKey.encode(e)
     e.u8(2)
-    identityKey.encode(e)
+    e.object(1)
+    e.u8(0)
+    e.bytes(sodium.from_hex(senderUserHash.slice(2)))
     e.u8(3)
-    e.u8(isPreKeyMessage)
+    e.bool(isPreKeyMessage)
     e.u8(4)
     e.u8(messageType)
     e.u8(5)
@@ -109,11 +103,20 @@ class MyEnvelope {
           break
         }
         case 2: {
-          header.identityKey = IdentityKey.decode(d)
+          const npropsMac = d.object()
+          for (let j = 0; j <= npropsMac - 1; j += 1) {
+            switch (d.u8()) {
+              case 0:
+                header.senderUserHash = `0x${sodium.to_hex(new Uint8Array(d.bytes()))}`
+                break
+              default:
+                d.skip()
+            }
+          }
           break
         }
         case 3: {
-          header.isPreKeyMessage = d.u8()
+          header.isPreKeyMessage = d.bool()
           break
         }
         case 4: {

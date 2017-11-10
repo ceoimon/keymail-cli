@@ -212,7 +212,7 @@ async-eventemitter@^0.2.2:
   dependencies:
     async "^2.4.0"
 
-async-eventemitter@ahultgren/async-eventemitter#fa06e39e56786ba541c180061dbf2c0a5bbf951c:
+"async-eventemitter@github:ahultgren/async-eventemitter#fa06e39e56786ba541c180061dbf2c0a5bbf951c":
   version "0.2.3"
   resolved "https://codeload.github.com/ahultgren/async-eventemitter/tar.gz/fa06e39e56786ba541c180061dbf2c0a5bbf951c"
   dependencies:
@@ -222,7 +222,13 @@ async@^1.4.2:
   version "1.5.2"
   resolved "https://registry.yarnpkg.com/async/-/async-1.5.2.tgz#ec6a61ae56480c0c3cb241c95618e20892f9672a"
 
-async@^2.0.1, async@^2.1.2, async@^2.4.0, async@^2.5.0:
+async@^2.0.1, async@^2.4.0, async@^2.5.0:
+  version "2.6.0"
+  resolved "https://registry.yarnpkg.com/async/-/async-2.6.0.tgz#61a29abb6fcc026fea77e56d1c6ec53a795951f4"
+  dependencies:
+    lodash "^4.14.0"
+
+async@^2.1.2:
   version "2.5.0"
   resolved "https://registry.yarnpkg.com/async/-/async-2.5.0.tgz#843190fd6b7357a0b9e1c956edddd5ec8462b54d"
   dependencies:
@@ -1566,8 +1572,8 @@ ethereumjs-util@^5.0.0, ethereumjs-util@^5.1.1:
     secp256k1 "^3.0.1"
 
 ethereumjs-vm@^2.0.2:
-  version "2.3.1"
-  resolved "https://registry.yarnpkg.com/ethereumjs-vm/-/ethereumjs-vm-2.3.1.tgz#6034196ccd53fcf0d6ea207dcde4c3e00dfd24cc"
+  version "2.3.2"
+  resolved "https://registry.yarnpkg.com/ethereumjs-vm/-/ethereumjs-vm-2.3.2.tgz#4f939e22b89e9b298f0c87a7e0f0d8949f485abd"
   dependencies:
     async "^2.1.2"
     async-eventemitter "^0.2.2"
@@ -1578,7 +1584,7 @@ ethereumjs-vm@^2.0.2:
     fake-merkle-patricia-tree "^1.0.1"
     functional-red-black-tree "^1.0.1"
     merkle-patricia-tree "^2.1.2"
-    rustbn.js "~0.1.0"
+    rustbn.js "~0.1.1"
     safe-buffer "^5.1.1"
 
 ethereumjs-wallet@^0.6.0:
@@ -2944,8 +2950,10 @@ natural-compare@^1.4.0:
   resolved "https://registry.yarnpkg.com/natural-compare/-/natural-compare-1.4.0.tgz#4abebfeed7541f2c27acfb29bdbbd15c8d5ba4f7"
 
 node-abi@^2.1.1:
-  version "2.1.1"
-  resolved "https://registry.yarnpkg.com/node-abi/-/node-abi-2.1.1.tgz#c9cda256ec8aa99bcab2f6446db38af143338b2a"
+  version "2.1.2"
+  resolved "https://registry.yarnpkg.com/node-abi/-/node-abi-2.1.2.tgz#4da6caceb6685fcd31e7dd1994ef6bb7d0a9c0b2"
+  dependencies:
+    semver "^5.4.1"
 
 node-fetch@~1.7.1:
   version "1.7.3"
@@ -3712,9 +3720,9 @@ run-async@^2.2.0, run-async@^2.3.0:
   dependencies:
     is-promise "^2.1.0"
 
-rustbn.js@~0.1.0:
-  version "0.1.0"
-  resolved "https://registry.yarnpkg.com/rustbn.js/-/rustbn.js-0.1.0.tgz#ddfea5f55bed7acd9ca34f26d7fd80971c225cc4"
+rustbn.js@~0.1.1:
+  version "0.1.1"
+  resolved "https://registry.yarnpkg.com/rustbn.js/-/rustbn.js-0.1.1.tgz#088b8c29d5f6d7d9f56ffb545f5d110e4a6801eb"
 
 rx-lite-aggregates@^4.0.8:
   version "4.0.8"
@@ -3756,8 +3764,8 @@ scryptsy@^1.2.1:
     pbkdf2 "^3.0.3"
 
 secp256k1@^3.0.1:
-  version "3.3.0"
-  resolved "https://registry.yarnpkg.com/secp256k1/-/secp256k1-3.3.0.tgz#50ec9b201ba401403dd13ccbf21d31eeb3ff43cf"
+  version "3.3.1"
+  resolved "https://registry.yarnpkg.com/secp256k1/-/secp256k1-3.3.1.tgz#d1d325519db714789c11ec0450d4b9a3aa01eb1a"
   dependencies:
     bindings "^1.2.1"
     bip66 "^1.1.3"
@@ -3773,7 +3781,7 @@ semaphore@>=1.0.1, semaphore@^1.0.3:
   version "1.1.0"
   resolved "https://registry.yarnpkg.com/semaphore/-/semaphore-1.1.0.tgz#aaad8b86b20fe8e9b32b16dc2ee682a8cd26a8aa"
 
-"semver@2 || 3 || 4 || 5", semver@^5.3.0, semver@~5.4.1:
+"semver@2 || 3 || 4 || 5", semver@^5.3.0, semver@^5.4.1, semver@~5.4.1:
   version "5.4.1"
   resolved "https://registry.yarnpkg.com/semver/-/semver-5.4.1.tgz#e059c09d8571f0540823733433505d3a2f00b18e"
 
@@ -4150,9 +4158,9 @@ trim@0.0.1:
   version "0.0.1"
   resolved "https://registry.yarnpkg.com/trim/-/trim-0.0.1.tgz#5858547f6b290757ee95cccc666fb50084c460dd"
 
-trustbase@^0.0.6:
-  version "0.0.6"
-  resolved "https://registry.yarnpkg.com/trustbase/-/trustbase-0.0.6.tgz#fdb4bbb9c492ad14764599798db77a371666c569"
+trustbase@^0.0.7:
+  version "0.0.7"
+  resolved "https://registry.yarnpkg.com/trustbase/-/trustbase-0.0.7.tgz#827b5ce753edb3ea206cc7baf3b771c0632794be"
   dependencies:
     bip39 "^2.4.0"
     ethereumjs-wallet "^0.6.0"

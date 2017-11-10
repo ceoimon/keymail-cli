@@ -39,7 +39,7 @@ async function handleRegister({
   const storagePath = argv.storagePath
   const userStoragePath = path.resolve(storagePath, `./${usernameHash}`)
   if ((await fs.exists(userStoragePath))) {
-    ora().info(`Found identity for '${username}' locally`)
+    ora().info(`Found identity for '${username}' on local`)
     process.exit(0)
   }
 
