@@ -212,7 +212,7 @@ async-eventemitter@^0.2.2:
   dependencies:
     async "^2.4.0"
 
-"async-eventemitter@github:ahultgren/async-eventemitter#fa06e39e56786ba541c180061dbf2c0a5bbf951c":
+async-eventemitter@ahultgren/async-eventemitter#fa06e39e56786ba541c180061dbf2c0a5bbf951c:
   version "0.2.3"
   resolved "https://codeload.github.com/ahultgren/async-eventemitter/tar.gz/fa06e39e56786ba541c180061dbf2c0a5bbf951c"
   dependencies:
@@ -222,15 +222,9 @@ async@^1.4.2:
   version "1.5.2"
   resolved "https://registry.yarnpkg.com/async/-/async-1.5.2.tgz#ec6a61ae56480c0c3cb241c95618e20892f9672a"
 
-async@^2.0.1, async@^2.4.0, async@^2.5.0:
+async@^2.0.1, async@^2.1.2, async@^2.4.0, async@^2.5.0:
   version "2.6.0"
   resolved "https://registry.yarnpkg.com/async/-/async-2.6.0.tgz#61a29abb6fcc026fea77e56d1c6ec53a795951f4"
-  dependencies:
-    lodash "^4.14.0"
-
-async@^2.1.2:
-  version "2.5.0"
-  resolved "https://registry.yarnpkg.com/async/-/async-2.5.0.tgz#843190fd6b7357a0b9e1c956edddd5ec8462b54d"
   dependencies:
     lodash "^4.14.0"
 
@@ -4158,14 +4152,9 @@ trim@0.0.1:
   version "0.0.1"
   resolved "https://registry.yarnpkg.com/trim/-/trim-0.0.1.tgz#5858547f6b290757ee95cccc666fb50084c460dd"
 
-trustbase@^0.0.7:
-  version "0.0.7"
-  resolved "https://registry.yarnpkg.com/trustbase/-/trustbase-0.0.7.tgz#827b5ce753edb3ea206cc7baf3b771c0632794be"
-  dependencies:
-    bip39 "^2.4.0"
-    ethereumjs-wallet "^0.6.0"
-    web3-provider-engine "^13.3.2"
-    xmlhttprequest "^1.8.0"
+trustbase@^0.0.8:
+  version "0.0.8"
+  resolved "https://registry.yarnpkg.com/trustbase/-/trustbase-0.0.8.tgz#12572fd26aa14db765fb098d58e066eaf752ac2c"
 
 tryit@^1.0.1:
   version "1.0.3"
@@ -4282,7 +4271,7 @@ watchpack@^1.3.1:
     chokidar "^1.7.0"
     graceful-fs "^4.1.2"
 
-web3-provider-engine@^13.3.2:
+web3-provider-engine@^13.3.3:
   version "13.3.3"
   resolved "https://registry.yarnpkg.com/web3-provider-engine/-/web3-provider-engine-13.3.3.tgz#1f6df4ec540161125f3e5f501bb0e56af83a01df"
   dependencies:
@@ -4429,10 +4418,6 @@ xhr@^2.2.0:
     is-function "^1.0.1"
     parse-headers "^2.0.0"
     xtend "^4.0.0"
-
-xmlhttprequest@^1.8.0:
-  version "1.8.0"
-  resolved "https://registry.yarnpkg.com/xmlhttprequest/-/xmlhttprequest-1.8.0.tgz#67fe075c5c24fef39f9d65f5f7b7fe75171968fc"
 
 xtend@4.0.1, xtend@^4.0.0, xtend@^4.0.1, xtend@~4.0.0:
   version "4.0.1"

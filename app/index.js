@@ -4,7 +4,7 @@ const os = require('os')
 
 const {
   getWeb3,
-  configure: configureTrustbase,
+  initialize: initializeTrustbase,
   Trustbase,
   PreKeyStore,
   Messages
@@ -26,6 +26,7 @@ const use = require('./use')
 const send = require('./send')
 const inbox = require('./inbox')
 const replacePreKeys = require('./replace-pre-keys')
+const HDWalletProvider = require('./HDWalletProvider')
 
 const {
   input,
@@ -204,14 +205,25 @@ const argv = yargs
   .argv;
 
 (async () => {
-  await configureTrustbase(argv)
-  const trustbase = await Trustbase.new({
+  let provider
+  if (argv.provider) {
+    provider = argv.mnemonic
+      ? new HDWalletProvider(argv.mnemonic, argv.provider, argv.index)
+      : argv.provider
+  }
+
+  await initializeTrustbase({
+    provider,
+    defaultAccount: argv.defaultAccount
+  })
+
+  const trustbase = new Trustbase({
     address: argv.trustbase
   })
-  const preKeyStore = await PreKeyStore.new({
+  const preKeyStore = new PreKeyStore({
     address: argv.preKeyStore
   })
-  const messages = await Messages.new({
+  const messages = new Messages({
     address: argv.messages
   })
 

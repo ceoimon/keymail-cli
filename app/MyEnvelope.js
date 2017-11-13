@@ -20,7 +20,7 @@ class MyEnvelope {
       new Uint8Array(this.serialise()), // binary represent
       preKeyPublicKey.pub_curve
     ))
-    // prepend the pre-key ID and nonce
+    // prepend the pre-key ID
     const preKeyIDBuf = Buffer.from(Uint16Array.from([preKeyID]).buffer)
     const concatedBuf = Buffer.concat([preKeyIDBuf, envelopeBuf]) // Buffer
     return sodium.to_hex(concatedBuf)
