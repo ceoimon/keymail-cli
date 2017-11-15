@@ -145,7 +145,6 @@ class MyEnvelope {
         }
       }
     }
-    delete header.test
     return new MyEnvelope(header, cipherMessage)
   }
 }

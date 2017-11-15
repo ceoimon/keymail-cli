@@ -10,8 +10,11 @@ const fuzzy = require('fuzzy')
 
 const MyCRUDStore = require('./MyCRUDStore')
 const MyEnvelope = require('./MyEnvelope')
+const uploadPreKeys = require('./upload-pre-keys')
 const {
   getPreKey,
+  getPreKeys,
+  unixToday,
   getPreKeyBundle,
   padTo512Bytes
 } = require('./utils')
@@ -25,9 +28,9 @@ const {
 
 async function handleSend({
   argv,
-  trustbase,
-  preKeyStore,
-  messages,
+  trustbaseIdentities,
+  trustbasePreKeys,
+  trustbaseMessages,
   inquirer,
   web3
 }) {
@@ -57,7 +60,9 @@ async function handleSend({
     ora().fail('Invalid username.')
     process.exit(1)
   }
-  if (!record[fromUsername] || !await trustbase.isOwner(web3.eth.defaultAccount, fromUsername)) {
+  if (!record[fromUsername]
+    || !await trustbaseIdentities.isOwner(fromUsername, web3.eth.defaultAccount)
+  ) {
     ora().fail('Invalid username, you don\'t own this account.')
     process.exit(1)
   }
@@ -111,7 +116,9 @@ async function handleSend({
     process.exit(1)
   }
   const toUsernameHash = argv.hash ? toUsername : web3.utils.sha3(toUsername)
-  const identityKeyString = await trustbase.getIdentity(toUsernameHash, { isHash: true })
+  const {
+    publicKey: identityKeyString
+  } = await trustbaseIdentities.getIdentity(toUsernameHash, { isHash: true })
   if (Number(identityKeyString) === 0) {
     ora().fail(`User(${toUsername}) not exist!`)
     process.exit(1)
@@ -152,16 +159,31 @@ async function handleSend({
   })
 
   const {
+    interval,
+    lastPrekeysDate,
+    preKeyPublicKeys
+  } = await getPreKeys({
+    trustbasePreKeys,
+    usernameOrusernameHash: toUsernameHash,
+    isHash: true
+  }).catch((err) => {
+    console.warn('Unexpected error happen when trying to retrieve pre-keys')
+    console.error(err)
+    process.exit(1)
+  })
+
+  const {
     id: preKeyID,
     publicKey: preKeyPublicKey
   } = await getPreKey({
-    preKeyStore,
-    usernameHash: toUsernameHash
+    interval,
+    lastPrekeysDate,
+    preKeyPublicKeys
   })
 
   if (!session) {
     const preKeyBundle = await getPreKeyBundle({
-      trustbase,
+      trustbaseIdentities,
       usernameHash: toUsernameHash,
       preKeyID,
       preKeyPublicKey
@@ -194,7 +216,7 @@ async function handleSend({
 
     const myEnvelope = new MyEnvelope(header, cipherMessage)
     const sedingSpinner = ora('Sending...').start()
-    await messages.publish(`0x${myEnvelope.encrypt(preKeyID, preKeyPublicKey)}`)
+    await trustbaseMessages.publish(`0x${myEnvelope.encrypt(preKeyID, preKeyPublicKey)}`)
     sedingSpinner.succeed('Sent')
 
     // save contact
@@ -248,8 +270,22 @@ async function handleSend({
       return new MyEnvelope(header, cipherMessage)
     })()
     const sedingSpinner = ora('Sending...').start()
-    await messages.publish(`0x${myEnvelope.encrypt(preKeyID, preKeyPublicKey)}`)
+    await trustbaseMessages.publish(`0x${myEnvelope.encrypt(preKeyID, preKeyPublicKey)}`)
     sedingSpinner.succeed('Sent')
+  }
+
+  if (argv.autoRefill && lastPrekeysDate < unixToday() + (argv.refillLimit * interval)) {
+    ora().warn('It seems like you dont have enough pre-keys, start upload new pre-keys')
+
+    await uploadPreKeys({
+      argv: {
+        ...argv,
+        username: fromUsername,
+        fileStore
+      },
+      inquirer,
+      trustbasePreKeys
+    })
   }
 
   process.exit(0)

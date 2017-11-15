@@ -5,8 +5,8 @@ const os = require('os')
 const {
   getWeb3,
   initialize: initializeTrustbase,
-  Trustbase,
-  PreKeyStore,
+  Identities,
+  PreKeys,
   Messages
 } = require('trustbase')
 
@@ -26,6 +26,7 @@ const use = require('./use')
 const send = require('./send')
 const inbox = require('./inbox')
 const replacePreKeys = require('./replace-pre-keys')
+
 const HDWalletProvider = require('./HDWalletProvider')
 
 const {
@@ -41,11 +42,13 @@ inquirer.registerPrompt('autocomplete', autocomplete)
 const preKeysOptions = {
   'pre-key-interval': {
     alias: ['pi', 'preKeyInterval'],
+    default: 1,
     number: true,
     describe: 'Interval of new pre-keys '
   },
   'pre-key-number': {
     alias: ['pn', 'preKeyNumber'],
+    default: 100,
     number: true,
     describe: 'Number of new pre-keys'
   }
@@ -56,7 +59,7 @@ const argv = yargs
   .global('config')
   .command('register', 'Register a new account', (_yargs) => {
     _yargs
-      .usage('Usage: $0 register [username]')
+      .usage('Usage: $0 register [username] [options]')
       .string('_')
       .options({
         ...preKeysOptions
@@ -64,7 +67,7 @@ const argv = yargs
   })
   .command('check-register', 'Check registration status', (_yargs) => {
     _yargs
-      .usage('Usage: $0 check-register [options] [username]')
+      .usage('Usage: $0 check-register [username] [options]')
       .string('_')
       .options({
         hash: {
@@ -76,17 +79,17 @@ const argv = yargs
   })
   .command('info', 'Get public key for a user', (_yargs) => {
     _yargs
-      .usage('Usage: $0 info [username]')
+      .usage('Usage: $0 info [username] [options]')
       .string('_')
   })
   .command('use', 'Set current using user', (_yargs) => {
     _yargs
-      .usage('Usage: $0 use [username]')
+      .usage('Usage: $0 use [username] [options]')
       .string('_')
   })
   .command('send', 'Send a message', (_yargs) => {
     _yargs
-      .usage('Usage: $0 send [to] [message]')
+      .usage('Usage: $0 send [to] [message] [options]')
       .string('_')
       .options({
         use: {
@@ -102,7 +105,7 @@ const argv = yargs
   })
   .command('inbox', 'Check your inbox', (_yargs) => {
     _yargs
-      .usage('Usage: $0 inbox [username]')
+      .usage('Usage: $0 inbox [username] [options]')
       .string('_')
       .options({
         use: {
@@ -121,7 +124,7 @@ const argv = yargs
   })
   .command('replace-pre-keys', 'Replace your pre-keys', (_yargs) => {
     _yargs
-      .usage('Usage: $0 replace-pre-keys [username]')
+      .usage('Usage: $0 replace-pre-keys [username] [options]')
       .string('_')
       .options({
         use: {
@@ -141,15 +144,15 @@ const argv = yargs
   .env('KEYMAIL')
   .config()
   .options({
-    trustbase: {
-      alias: 'T',
-      describe: 'Trustbase contract deployed address',
+    identities: {
+      alias: 'I',
+      describe: 'Identities contract deployed address',
       string: true,
       global: true
     },
-    'pre-key-store': {
-      alias: ['P', 'preKeyStore'],
-      describe: 'PreKeyStore contract deployed address',
+    'pre-keys': {
+      alias: ['P', 'preKeys'],
+      describe: 'PreKeys contract deployed address',
       string: true,
       global: true
     },
@@ -182,6 +185,7 @@ const argv = yargs
       alias: ['wm', 'mnemonic'],
       default: 'donkey guess rain range must chef clump obvious issue still vast ask',
       describe: 'Mnemonic for HD Wallet',
+      string: true,
       global: true
     },
     'wallet-index': {
@@ -197,14 +201,28 @@ const argv = yargs
       string: true,
       describe: 'Path for public/secret keys storage',
       global: true
+    },
+    'auto-refill': {
+      alias: ['r', 'autoRefill'],
+      default: true,
+      boolean: true,
+      describe: 'Generate and upload new pre-keys when pre-keys are not enough (see `refill-limit` also)',
+      global: true
+    },
+    'refill-limit': {
+      alias: ['rl', 'refillLimit'],
+      default: 10,
+      number: true,
+      describe: 'Auto refill when option `auto-refill` set to `true` and pre-keys number less than the limit',
+      global: true
     }
   })
   .help('h')
   .alias('h', 'help')
   .demandCommand(1, '')
-  .argv;
+  .argv
 
-(async () => {
+async function connectToTrustbase() {
   let provider
   if (argv.provider) {
     provider = argv.mnemonic
@@ -217,13 +235,13 @@ const argv = yargs
     defaultAccount: argv.defaultAccount
   })
 
-  const trustbase = new Trustbase({
-    address: argv.trustbase
+  const trustbaseIdentities = new Identities({
+    address: argv.identities
   })
-  const preKeyStore = new PreKeyStore({
-    address: argv.preKeyStore
+  const trustbasePreKeys = new PreKeys({
+    address: argv.preKeys
   })
-  const messages = new Messages({
+  const trustbaseMessages = new Messages({
     address: argv.messages
   })
 
@@ -253,30 +271,38 @@ const argv = yargs
   argv.currentUserPath = currentUserPath
   argv.currentUser = currentUser
 
-  const handlerOptions = {
+  return {
     argv,
     inquirer,
-    trustbase,
-    preKeyStore,
-    messages,
+    trustbaseIdentities,
+    trustbasePreKeys,
+    trustbaseMessages,
     web3: getWeb3()
   }
-  switch (argv._[0]) {
-    case 'register':
-      return register(handlerOptions)
-    case 'check-register':
-      return checkRegister(handlerOptions)
-    case 'info':
-      return info(handlerOptions)
-    case 'use':
-      return use(handlerOptions)
-    case 'send':
-      return send(handlerOptions)
-    case 'inbox':
-      return inbox(handlerOptions)
-    case 'replace-pre-keys':
-      return replacePreKeys(handlerOptions)
-    default:
-      return yargs.showHelp()
-  }
-})()
+}
+
+switch (argv._[0]) {
+  case 'register':
+    connectToTrustbase().then(register)
+    break
+  case 'check-register':
+    connectToTrustbase().then(checkRegister)
+    break
+  case 'info':
+    connectToTrustbase().then(info)
+    break
+  case 'use':
+    connectToTrustbase().then(use)
+    break
+  case 'send':
+    connectToTrustbase().then(send)
+    break
+  case 'inbox':
+    connectToTrustbase().then(inbox)
+    break
+  case 'replace-pre-keys':
+    connectToTrustbase().then(replacePreKeys)
+    break
+  default:
+    yargs.showHelp()
+}

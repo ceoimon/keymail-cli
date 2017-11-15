@@ -11,8 +11,8 @@ const usernamePrompt = [
 
 async function handleInfo({
   argv,
-  trustbase,
   inquirer,
+  trustbaseIdentities,
   web3
 }) {
   const username = argv._.length > 1 ? argv._[1] : (await inquirer.prompt(usernamePrompt)).username
@@ -22,13 +22,18 @@ async function handleInfo({
     process.exit(1)
   }
 
-  const identityKeyString = await trustbase.getIdentity(username)
+  const {
+    owner,
+    publicKey: identityKeyString
+  } = await trustbaseIdentities.getIdentity(username)
+
   if (Number(identityKeyString) === 0) {
     ora().info(`User('${username}') not found`)
   } else {
     console.log(JSON.stringify({
       username,
       usernameHash: web3.utils.sha3(username),
+      owner,
       identity: identityKeyString
     }, null, '    '))
   }

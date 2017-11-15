@@ -14,9 +14,9 @@ const {
 
 async function handleCheckRegister({
   argv,
-  trustbase,
-  preKeyStore,
   inquirer,
+  trustbaseIdentities,
+  trustbasePreKeys,
   web3
 }) {
   let username = ''
@@ -67,7 +67,7 @@ async function handleCheckRegister({
 
   if (!pendingRecords[username]) {
     ora().warn(`Register record for '${username}' was not found on your machine`)
-    const identityKeyString = await trustbase.getIdentity(username)
+    const { publicKey: identityKeyString } = await trustbaseIdentities.getIdentity(username)
     if (Number(identityKeyString) === 0) {
       ora().info(`Lucky! '${username}' has not been registered!(you can use \`register\` command to register)`)
     } else {
@@ -91,7 +91,9 @@ async function handleCheckRegister({
     if (counter >= 3 && receipt !== null) {
       delete pendingRecords[username]
       await fs.writeJSON(pendingRecordPath, pendingRecords)
-      const registeredIdentityKeyString = await trustbase.getIdentity(username)
+      const {
+        publicKey: registeredIdentityKeyString
+      } = await trustbaseIdentities.getIdentity(username)
       if (registeredIdentityKeyString === `0x${identityKeyPair.public_key.fingerprint()}`) {
         waitTxSpinner.succeed('Registration success!')
 
@@ -103,7 +105,7 @@ async function handleCheckRegister({
             identityKeyPair
           },
           inquirer,
-          preKeyStore
+          trustbasePreKeys
         })
 
         const recordPath = argv.recordPath

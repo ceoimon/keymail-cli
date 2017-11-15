@@ -1,7 +1,10 @@
 const Proteus = require('wire-webapp-proteus')
 const ora = require('ora')
 
+const sodium = require('libsodium-wrappers')
+
 const { unixToday } = require('./utils')
+const PreKeysPackage = require('./PreKeysPackage')
 
 const {
   PreKey
@@ -16,10 +19,10 @@ function generatePrekeys(start, interval, size) {
     .map(x => PreKey.new(((start + (x * interval)) % PreKey.MAX_PREKEY_ID)))
 }
 
-async function addPreKeys({
+async function uploadPreKeys({
   argv,
   inquirer,
-  preKeyStore
+  trustbasePreKeys
 }) {
   let {
     preKeyInterval: interval,
@@ -28,8 +31,7 @@ async function addPreKeys({
 
   const {
     username,
-    fileStore,
-    fromUnixDay = unixToday()
+    fileStore
   } = argv
 
   if (!interval) {
@@ -54,18 +56,19 @@ async function addPreKeys({
 
   const spinner = ora('Uploading pre-keys').start()
 
-  const preKeys = generatePrekeys(fromUnixDay, interval, numOfPreKeys)
-  const preKeysPublicKeys = preKeys.map(preKey => `0x${preKey.key_pair.public_key.fingerprint()}`)
+  const preKeys = generatePrekeys(unixToday(), interval, numOfPreKeys)
+  const preKeysPublicKeys = preKeys.reduce((result, preKey) => Object.assign(result, {
+    [preKey.key_id]: `0x${preKey.key_pair.public_key.fingerprint()}`
+  }), {})
   const lastResortPrekey = PreKey.last_resort() // id is 65535
-  lastResortPrekey.key_pair = preKeys[preKeys.length - 1].key_pair
+  const lastPreKey = preKeys[preKeys.length - 1]
+  lastResortPrekey.key_pair = lastPreKey.key_pair
+  const preKeysPackage = new PreKeysPackage(preKeysPublicKeys, interval, lastPreKey.key_id)
   await fileStore.save_prekeys(preKeys.concat(lastResortPrekey))
 
-  await preKeyStore.uploadPrekeys(username, preKeysPublicKeys, {
-    interval,
-    fromUnixDay
-  })
+  await trustbasePreKeys.upload(username, `0x${sodium.to_hex(new Uint8Array(preKeysPackage.serialise()))}`)
 
   spinner.succeed('PreKeys uploaded')
 }
 
-module.exports = addPreKeys
+module.exports = uploadPreKeys

@@ -4152,9 +4152,9 @@ trim@0.0.1:
   version "0.0.1"
   resolved "https://registry.yarnpkg.com/trim/-/trim-0.0.1.tgz#5858547f6b290757ee95cccc666fb50084c460dd"
 
-trustbase@^0.0.8:
-  version "0.0.8"
-  resolved "https://registry.yarnpkg.com/trustbase/-/trustbase-0.0.8.tgz#12572fd26aa14db765fb098d58e066eaf752ac2c"
+trustbase@^0.0.9:
+  version "0.0.9"
+  resolved "https://registry.yarnpkg.com/trustbase/-/trustbase-0.0.9.tgz#f1888e1675c86c811901d92a7acb431aa6f3ff5e"
 
 tryit@^1.0.1:
   version "1.0.3"

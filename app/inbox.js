@@ -10,8 +10,10 @@ const sodium = require('libsodium-wrappers')
 
 const MyCRUDStore = require('./MyCRUDStore')
 const MyEnvelope = require('./MyEnvelope')
+const uploadPreKeys = require('./upload-pre-keys')
 
 const {
+  getPreKeys,
   getEmptyEnvelope,
   identityKeyFromHexStr,
   unpad512BytesMessage,
@@ -28,9 +30,10 @@ const {
 
 async function handleInbox({
   argv,
-  messages,
   inquirer,
-  trustbase,
+  trustbaseIdentities,
+  trustbasePreKeys,
+  trustbaseMessages,
   web3
 }) {
   const recordPath = argv.recordPath
@@ -60,7 +63,7 @@ async function handleInbox({
     process.exit(1)
   }
 
-  if (!record[username] || !await trustbase.isOwner(web3.eth.defaultAccount, username)) {
+  if (!record[username] || !await trustbaseIdentities.isOwner(username, web3.eth.defaultAccount)) {
     ora().fail('Invalid username, you don\'t own this username.')
     process.exit(1)
   }
@@ -182,7 +185,9 @@ async function handleInbox({
       messageType,
       messageByteLength
     } = myEnvelope.header
-    const identityKeyString = await trustbase.getIdentity(senderUserHash, { isHash: true })
+    const {
+      publicKey: identityKeyString
+    } = await trustbaseIdentities.getIdentity(senderUserHash, { isHash: true })
     const theirIdentityKey = identityKeyFromHexStr(identityKeyString.slice(2))
 
     proteusEnvelope.mac = mac
@@ -227,7 +232,7 @@ async function handleInbox({
     const {
       lastBlock: newLastBlock,
       messages: allNewMessages
-    } = await messages.getMessages({
+    } = await trustbaseMessages.getMessages({
       fromBlock: _lastBlock > 0 ? _lastBlock : 0
     })
 
@@ -305,9 +310,38 @@ async function handleInbox({
       ? `Fetched ${newMessagesNum} new message(s)`
       : 'Inbox is up to date')
 
-    await deleteOutdatedPreKeys()
 
     newReceivedMessages.forEach(displayMessage)
+
+    await deleteOutdatedPreKeys()
+
+    if (argv.autoRefill) {
+      const {
+        interval,
+        lastPrekeysDate
+      } = await getPreKeys({
+        trustbasePreKeys,
+        usernameOrusernameHash: username
+      }).catch((err) => {
+        console.warn('Unexpected error happen when trying to retrieve pre-keys')
+        console.error(err)
+        process.exit(1)
+      })
+
+      if (lastPrekeysDate < unixToday() + (argv.refillLimit * interval)) {
+        ora().warn('It seems like you dont have enough pre-keys, start upload new pre-keys')
+
+        await uploadPreKeys({
+          argv: {
+            ...argv,
+            username,
+            fileStore
+          },
+          inquirer,
+          trustbasePreKeys
+        })
+      }
+    }
 
     process.exit(0)
   }

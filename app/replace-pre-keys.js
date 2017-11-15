@@ -4,20 +4,21 @@ const ora = require('ora')
 
 const { StoreEngine: { FileEngine } } = require('@wireapp/store-engine')
 
+const uploadPreKeys = require('./upload-pre-keys')
 const MyCRUDStore = require('./MyCRUDStore')
-const addPreKeys = require('./add-pre-keys')
 
 const {
   getUnixDay,
+  getPreKeys,
   unixToday
 } = require('./utils')
 
 async function handleReplacePreKeys({
   argv,
-  trustbase,
-  web3,
-  preKeyStore,
-  inquirer
+  inquirer,
+  trustbaseIdentities,
+  trustbasePreKeys,
+  web3
 }) {
   const recordPath = argv.recordPath
   const record = await fs.readJSON(recordPath)
@@ -45,7 +46,7 @@ async function handleReplacePreKeys({
     process.exit(1)
   }
 
-  if (!record[username] || !await trustbase.isOwner(web3.eth.defaultAccount, username)) {
+  if (!record[username] || !await trustbaseIdentities.isOwner(username, web3.eth.defaultAccount)) {
     ora().fail('Invalid username, you don\'t own this username.')
     process.exit(1)
   }
@@ -55,7 +56,14 @@ async function handleReplacePreKeys({
   const {
     interval,
     lastPrekeysDate
-  } = await preKeyStore.getMetaData(username)
+  } = await getPreKeys({
+    trustbasePreKeys,
+    usernameOrusernameHash: username
+  }).catch((err) => {
+    console.warn('Unexpected error happen when trying to retrieve pre-keys')
+    console.error(err)
+    process.exit(1)
+  })
 
   const usernameHash = record[username]
   const userStoragePath = path.resolve(argv.storagePath, `./${usernameHash}`)
@@ -65,22 +73,21 @@ async function handleReplacePreKeys({
 
   if (replaceFromThisDay > lastPrekeysDate) {
     ora().warn('You are not replacing any pre-keys')
-    if (lastPrekeysDate > unixToday() + (10 * interval)) {
-      ora().succeed('And seems like you have enough pre-keys')
-      process.exit(0)
-    }
-    ora().warn('And seems like you dont have enough pre-keys, start upload new pre-keys')
+    if (argv.autoRefill
+      && lastPrekeysDate < unixToday() + (argv.refillLimit * interval)
+    ) {
+      ora().warn('It seems like you dont have enough pre-keys, start upload new pre-keys')
 
-    await addPreKeys({
-      argv: {
-        ...argv,
-        username,
-        fileStore,
-        fromUnixDay: lastPrekeysDate + interval
-      },
-      inquirer,
-      preKeyStore
-    })
+      await uploadPreKeys({
+        argv: {
+          ...argv,
+          username,
+          fileStore
+        },
+        inquirer,
+        trustbasePreKeys
+      })
+    }
     process.exit(0)
   }
 
@@ -89,15 +96,14 @@ async function handleReplacePreKeys({
     .filter(preKey => Number(preKey.key_id) > replaceFromThisDay)
     .map(preKeyToDelete => fileStore.deletePrekey(preKeyToDelete.key_id)))
 
-  await addPreKeys({
+  await uploadPreKeys({
     argv: {
       ...argv,
       username,
-      fileStore,
-      fromUnixDay: replaceFromThisDay
+      fileStore
     },
     inquirer,
-    preKeyStore
+    trustbasePreKeys
   })
 
   process.exit(0)

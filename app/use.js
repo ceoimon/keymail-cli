@@ -3,8 +3,8 @@ const ora = require('ora')
 
 async function handleUse({
   argv,
-  trustbase,
   inquirer,
+  trustbaseIdentities,
   web3
 }) {
   const recordPath = argv.recordPath
@@ -31,7 +31,7 @@ async function handleUse({
     process.exit(1)
   }
 
-  if (!record[username] || !await trustbase.isOwner(web3.eth.defaultAccount, username)) {
+  if (!record[username] || !await trustbaseIdentities.isOwner(username, web3.eth.defaultAccount)) {
     ora().fail('Invalid username, you don\'t own this username.')
     process.exit(1)
   }

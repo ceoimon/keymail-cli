@@ -3,13 +3,13 @@ const fs = require('fs-extra')
 
 const { StoreEngine: { FileEngine } } = require('@wireapp/store-engine')
 
-const addPreKeys = require('./add-pre-keys')
+const uploadPreKeys = require('./upload-pre-keys')
 const MyCRUDStore = require('./MyCRUDStore')
 
 async function createAccount({
   argv,
   inquirer,
-  preKeyStore
+  trustbasePreKeys
 }) {
   const {
     storagePath,
@@ -24,13 +24,13 @@ async function createAccount({
 
   await fileStore.save_identity(identityKeyPair)
 
-  await addPreKeys({
+  await uploadPreKeys({
     argv: {
       ...argv,
       fileStore
     },
     inquirer,
-    preKeyStore
+    trustbasePreKeys
   })
 }
 

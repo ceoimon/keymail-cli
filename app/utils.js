@@ -11,6 +11,7 @@ const sodium = require('libsodium-wrappers')
 const ed2curve = require('ed2curve')
 
 const MyPreKeyBundle = require('./MyPreKeyBundle')
+const PreKeysPackage = require('./PreKeysPackage')
 
 function getUnixDay(javaScriptTimestamp) {
   return Math.floor(javaScriptTimestamp / 1000 / 3600 / 24)
@@ -67,35 +68,40 @@ function unpad512BytesMessage(padded512BytesMessage, messageByteLength) {
   ))
 }
 
-const bytes32Zero = '0x0000000000000000000000000000000000000000000000000000000000000000'
+async function getPreKeys({
+  trustbasePreKeys,
+  usernameOrusernameHash,
+  isHash = false
+}) {
+  const preKeysPackageSerializedStr = await trustbasePreKeys.getPreKeys(
+    usernameOrusernameHash,
+    { isHash }
+  )
+  return PreKeysPackage.deserialize(sodium.from_hex(preKeysPackageSerializedStr.slice(2)).buffer)
+}
 
 async function getPreKey({
-  preKeyStore,
-  usernameHash
+  interval,
+  lastPrekeysDate,
+  preKeyPublicKeys
 }) {
-  const {
-    interval,
-    lastPrekeysDate
-  } = await preKeyStore.getMetaData(usernameHash, { isHash: true })
-
-  let preKeyPublicKeyString = bytes32Zero
+  let preKeyPublicKeyString
   let preKeyID = unixToday()
   if (preKeyID > lastPrekeysDate) {
-    preKeyPublicKeyString = await preKeyStore.getPrekey(usernameHash, 65535, { isHash: true })
-    preKeyID = 65535
+    preKeyID = lastPrekeysDate
+    preKeyPublicKeyString = preKeyPublicKeys[preKeyID]
   } else {
     const limitDay = preKeyID - interval
-    while (preKeyID > limitDay && preKeyPublicKeyString === bytes32Zero) {
-      // eslint-disable-next-line
-      preKeyPublicKeyString = await preKeyStore.getPrekey(usernameHash, preKeyID, { isHash: true })
+    while (preKeyID > limitDay && preKeyPublicKeyString === undefined) {
+      preKeyPublicKeyString = preKeyPublicKeys[preKeyID]
       preKeyID -= 1
     }
     preKeyID += 1
 
     // If not found, use last-resort pre-key
-    if (preKeyPublicKeyString === bytes32Zero) {
-      preKeyPublicKeyString = await preKeyStore.getPrekey(usernameHash, 65535, { isHash: true })
-      preKeyID = 65535
+    if (preKeyPublicKeyString === undefined) {
+      preKeyID = lastPrekeysDate
+      preKeyPublicKeyString = await preKeyPublicKeys[lastPrekeysDate]
     }
   }
 
@@ -107,12 +113,14 @@ async function getPreKey({
 }
 
 async function getPreKeyBundle({
-  trustbase,
+  trustbaseIdentities,
   usernameHash,
   preKeyID,
   preKeyPublicKey
 }) {
-  const identityKeyString = await trustbase.getIdentity(usernameHash, { isHash: true })
+  const {
+    publicKey: identityKeyString
+  } = await trustbaseIdentities.getIdentity(usernameHash, { isHash: true })
   const identityKey = identityKeyFromHexStr(identityKeyString.slice(2))
 
   return MyPreKeyBundle.new(identityKey, preKeyPublicKey, preKeyID)
@@ -121,6 +129,7 @@ async function getPreKeyBundle({
 module.exports = {
   unixToday,
   getPreKey,
+  getPreKeys,
   getPreKeyBundle,
   publicKeyFromHexStr,
   identityKeyFromHexStr,

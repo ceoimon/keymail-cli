@@ -23,9 +23,9 @@ const usernamePrompt = [
 
 async function handleRegister({
   argv,
-  trustbase,
-  preKeyStore,
   inquirer,
+  trustbaseIdentities,
+  trustbasePreKeys,
   web3
 }) {
   const username = argv._.length > 1 ? argv._[1] : (await inquirer.prompt(usernamePrompt)).username
@@ -51,12 +51,12 @@ async function handleRegister({
         _: ['check-register', username]
       },
       inquirer,
-      trustbase
+      trustbaseIdentities
     })
     return
   }
 
-  const identityKeyString = await trustbase.getIdentity(username)
+  const { publicKey: identityKeyString } = await trustbaseIdentities.getIdentity(username)
 
   if (Number(identityKeyString) !== 0) {
     ora().fail('Username already registered. Try another account name.')
@@ -70,7 +70,7 @@ async function handleRegister({
 
   const newIdentityKeyString = `0x${identityKeyPair.public_key.fingerprint()}`
 
-  trustbase.register(username, newIdentityKeyString)
+  trustbaseIdentities.register(username, newIdentityKeyString)
     .on('transactionHash', async (transactionHash) => {
       transactionSpinner.succeed(`Transaction created: ${transactionHash}`)
       const recordSpinner = ora('Saving register record').start()
@@ -95,7 +95,9 @@ async function handleRegister({
     .on('confirmation', async (confirmationNumber) => {
       if (confirmationNumber === 3) {
         await fs.writeJSON(pendingRecordPath, pendingRecords)
-        const registeredIdentityKeyString = await trustbase.getIdentity(username)
+        const {
+          publicKey: registeredIdentityKeyString
+        } = await trustbaseIdentities.getIdentity(username)
         if (registeredIdentityKeyString === newIdentityKeyString) {
           waitTxSpinner.succeed('Registration success!')
 
@@ -107,7 +109,7 @@ async function handleRegister({
               identityKeyPair
             },
             inquirer,
-            preKeyStore
+            trustbasePreKeys
           })
 
           const recordPath = argv.recordPath
