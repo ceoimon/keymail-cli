@@ -1,7 +1,7 @@
 {
   "name": "keymail-cli",
   "version": "0.0.6",
-  "description": "Blockchain-based Email",
+  "description": "Blockchain-based (Ethereum) Email",
   "repository": {
     "type": "git",
     "url": "https://github.com/ceoimon/keymail-cli.git"
