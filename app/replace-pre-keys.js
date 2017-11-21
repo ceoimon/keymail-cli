@@ -8,7 +8,6 @@ const uploadPreKeys = require('./upload-pre-keys')
 const MyCRUDStore = require('./MyCRUDStore')
 
 const {
-  getUnixDay,
   getPreKeys,
   unixToday
 } = require('./utils')
@@ -51,8 +50,6 @@ async function handleReplacePreKeys({
     process.exit(1)
   }
 
-  const replaceFromThisDay = getUnixDay(argv.from)
-
   const {
     interval,
     lastPrekeysDate
@@ -71,7 +68,9 @@ async function handleReplacePreKeys({
   const engine = new FileEngine(userStoragePath)
   const fileStore = new MyCRUDStore(engine)
 
-  if (replaceFromThisDay > lastPrekeysDate) {
+  const today = unixToday()
+
+  if (today > lastPrekeysDate) {
     ora().warn('You are not replacing any pre-keys')
     if (argv.autoRefill
       && lastPrekeysDate < unixToday() + (argv.refillLimit * interval)
@@ -93,7 +92,7 @@ async function handleReplacePreKeys({
 
   const preKeysFromStorage = await fileStore.load_prekeys()
   await Promise.all(preKeysFromStorage
-    .filter(preKey => Number(preKey.key_id) > replaceFromThisDay)
+    .filter(preKey => Number(preKey.key_id) >= today)
     .map(preKeyToDelete => fileStore.deletePrekey(preKeyToDelete.key_id)))
 
   await uploadPreKeys({

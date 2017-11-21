@@ -131,12 +131,6 @@ const argv = yargs
           alias: 'u',
           describe: 'Use this keymail account'
         },
-        from: {
-          alias: 'f',
-          number: true,
-          default: Date.now(),
-          describe: 'JavaScript timestamp, replace all pre-keys after this date'
-        },
         ...preKeysOptions
       })
   })
