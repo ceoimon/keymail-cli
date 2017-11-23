@@ -60,10 +60,8 @@ async function handleSend({
     ora().fail('Invalid username.')
     process.exit(1)
   }
-  if (!record[fromUsername]
-    || !await trustbaseIdentities.isOwner(fromUsername, web3.eth.defaultAccount)
-  ) {
-    ora().fail('Invalid username, you don\'t own this account.')
+  if (!record[fromUsername]) {
+    ora().fail('Invalid username, could not find identity on local.')
     process.exit(1)
   }
 
