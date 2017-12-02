@@ -80,7 +80,7 @@ async function getPreKeys({
   return PreKeysPackage.deserialize(sodium.from_hex(preKeysPackageSerializedStr.slice(2)).buffer)
 }
 
-async function getPreKey({
+function getPreKey({
   interval,
   lastPrekeysDate,
   preKeyPublicKeys
@@ -101,7 +101,7 @@ async function getPreKey({
     // If not found, use last-resort pre-key
     if (preKeyPublicKeyString === undefined) {
       preKeyID = lastPrekeysDate
-      preKeyPublicKeyString = await preKeyPublicKeys[lastPrekeysDate]
+      preKeyPublicKeyString = preKeyPublicKeys[lastPrekeysDate]
     }
   }
 

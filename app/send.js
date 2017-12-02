@@ -173,7 +173,7 @@ async function handleSend({
   const {
     id: preKeyID,
     publicKey: preKeyPublicKey
-  } = await getPreKey({
+  } = getPreKey({
     interval,
     lastPrekeysDate,
     preKeyPublicKeys
